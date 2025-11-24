@@ -49,6 +49,9 @@ locals {
     local.comprehend_in_current_region ? ["comprehend"] : [],
     local.translate_in_current_region ? ["translate"] : [],
   )
+
+  # Internet access required
+  internet_access_required = local.cross_region_access_needed || var.aws_bedrock_marketplace_auto_subscribe != false
 }
 
 module "vpc" {
@@ -56,7 +59,7 @@ module "vpc" {
   version = "~> 1.0"
 
   name_prefix                 = local.name
-  internet_access_allowed     = local.cross_region_access_needed || var.aws_bedrock_marketplace_auto_subscribe != false
+  internet_access_allowed     = local.internet_access_required
   nat_gateways_allowed        = var.nat_gateways_allowed
   vpc_endpoints_allowed       = var.vpc_endpoints_allowed
   availability_zones_count    = var.availability_zones_count

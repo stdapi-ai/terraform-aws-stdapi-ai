@@ -135,7 +135,7 @@ See [Example 2: Production Deployment](../../docs/operations_getting_started.md#
 | Name | Source | Version |
 |------|--------|---------|
 | <a name="module_kms_key"></a> [kms\_key](#module\_kms\_key) | JGoutin/kms-key/aws | ~> 1.0 |
-| <a name="module_server"></a> [server](#module\_server) | JGoutin/ecs-fargate/aws | ~> 1.0 |
+| <a name="module_server"></a> [server](#module\_server) | JGoutin/ecs-fargate/aws | ~> 1.1 |
 | <a name="module_vpc"></a> [vpc](#module\_vpc) | JGoutin/vpc/aws | ~> 1.0 |
 
 ## Resources
