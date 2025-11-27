@@ -69,30 +69,34 @@ module "server" {
           TOKENS_ESTIMATION_DEFAULT_ENCODING = var.tokens_estimation_default_encoding
         } : k => v if v != null },
         { for k, v in {
-          AWS_S3_ACCELERATE                         = var.aws_s3_accelerate
-          AWS_BEDROCK_CROSS_REGION_INFERENCE        = var.aws_bedrock_cross_region_inference
-          AWS_BEDROCK_CROSS_REGION_INFERENCE_GLOBAL = var.aws_bedrock_cross_region_inference_global
-          AWS_BEDROCK_LEGACY                        = var.aws_bedrock_legacy
-          AWS_BEDROCK_MARKETPLACE_AUTO_SUBSCRIBE    = var.aws_bedrock_marketplace_auto_subscribe
-          OTEL_ENABLED                              = var.otel_enabled
-          OTEL_SAMPLE_RATE                          = var.otel_sample_rate
-          LOG_REQUEST_PARAMS                        = var.log_request_params
-          LOG_CLIENT_IP                             = var.log_client_ip
-          STRICT_INPUT_VALIDATION                   = var.strict_input_validation
-          TOKENS_ESTIMATION                         = var.tokens_estimation
-          ENABLE_DOCS                               = var.enable_docs
-          ENABLE_REDOC                              = var.enable_redoc
-          ENABLE_OPENAPI_JSON                       = var.enable_openapi_json
-          ENABLE_PROXY_HEADERS                      = (var.enable_proxy_headers != null || (var.alb_enabled && var.log_client_ip == true)) ? true : null
-          ENABLE_GZIP                               = var.enable_gzip
-          SSRF_PROTECTION_BLOCK_PRIVATE_NETWORKS    = var.ssrf_protection_block_private_networks
-          MODEL_CACHE_SECONDS                       = var.model_cache_seconds
+          AWS_S3_ACCELERATE                                    = var.aws_s3_accelerate
+          AWS_BEDROCK_CROSS_REGION_INFERENCE                   = var.aws_bedrock_cross_region_inference
+          AWS_BEDROCK_CROSS_REGION_INFERENCE_GLOBAL            = var.aws_bedrock_cross_region_inference_global
+          AWS_BEDROCK_LEGACY                                   = var.aws_bedrock_legacy
+          AWS_BEDROCK_MARKETPLACE_AUTO_SUBSCRIBE               = var.aws_bedrock_marketplace_auto_subscribe
+          AWS_BEDROCK_ALLOW_CROSS_REGION_INFERENCE_PROFILE_ARN = var.aws_bedrock_allow_cross_region_inference_profile_arn
+          AWS_BEDROCK_ALLOW_APPLICATION_INFERENCE_PROFILE_ARN  = var.aws_bedrock_allow_application_inference_profile_arn
+          AWS_BEDROCK_ALLOW_PROMPT_ROUTER_ARN                  = var.aws_bedrock_allow_prompt_router_arn
+          OTEL_ENABLED                                         = var.otel_enabled
+          OTEL_SAMPLE_RATE                                     = var.otel_sample_rate
+          LOG_REQUEST_PARAMS                                   = var.log_request_params
+          LOG_CLIENT_IP                                        = var.log_client_ip
+          STRICT_INPUT_VALIDATION                              = var.strict_input_validation
+          TOKENS_ESTIMATION                                    = var.tokens_estimation
+          ENABLE_DOCS                                          = var.enable_docs
+          ENABLE_REDOC                                         = var.enable_redoc
+          ENABLE_OPENAPI_JSON                                  = var.enable_openapi_json
+          ENABLE_PROXY_HEADERS                                 = (var.enable_proxy_headers != null || (var.alb_enabled && var.log_client_ip == true)) ? true : null
+          ENABLE_GZIP                                          = var.enable_gzip
+          SSRF_PROTECTION_BLOCK_PRIVATE_NETWORKS               = var.ssrf_protection_block_private_networks
+          MODEL_CACHE_SECONDS                                  = var.model_cache_seconds
         } : k => tostring(v) if v != null },
         { for k, v in {
-          AWS_S3_REGIONAL_BUCKETS = var.aws_s3_regional_buckets
-          CORS_ALLOW_ORIGINS      = var.cors_allow_origins
-          TRUSTED_HOSTS           = var.trusted_hosts
-        } : k => jsonencode(v) if v != null }
+          AWS_S3_REGIONAL_BUCKETS       = var.aws_s3_regional_buckets
+          AWS_BEDROCK_MODEL_ARN_MAPPING = var.aws_bedrock_model_arn_mapping
+          CORS_ALLOW_ORIGINS            = var.cors_allow_origins
+          TRUSTED_HOSTS                 = var.trusted_hosts
+        } : k => jsonencode(v) if v != null && (k != "AWS_BEDROCK_MODEL_ARN_MAPPING" || length(v) > 0) }
       )
       secrets = var.api_key != null || var.api_key_create ? {
         API_KEY = var.api_key != null ? var.api_key : random_password.api_key[0].result
@@ -147,6 +151,19 @@ data "aws_iam_policy_document" "server" {
       "bedrock:InvokeModelWithResponseStream",
     ]
     resources = ["*"]
+  }
+
+  # Bedrock - Inference Profiles & Prompt Routers (Optional)
+  dynamic "statement" {
+    for_each = var.aws_bedrock_allow_cross_region_inference_profile_arn != false || var.aws_bedrock_allow_application_inference_profile_arn != false || var.aws_bedrock_allow_prompt_router_arn != false || length(var.aws_bedrock_model_arn_mapping) > 0 ? [1] : []
+    content {
+      sid = "BedrockInferenceProfiles"
+      actions = [
+        "bedrock:GetInferenceProfile",
+        "bedrock:GetPromptRouter",
+      ]
+      resources = ["*"]
+    }
   }
 
   # Bedrock - Model Discovery (Always Required)

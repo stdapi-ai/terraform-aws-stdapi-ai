@@ -41,6 +41,42 @@ variable "aws_s3_buckets_kms_keys_arns" {
   default     = []
 }
 
+variable "aws_bedrock_allow_cross_region_inference_profile_arn" {
+  description = "If True, allow users to pass cross-region inference profile ARNs directly as model IDs. Cross-region inference profiles enable routing to multiple regions for better availability. When disabled, only standard model IDs and configured profiles are accepted."
+  type        = bool
+  default     = null
+}
+
+variable "aws_bedrock_allow_application_inference_profile_arn" {
+  description = "If True, allow users to pass application inference profile ARNs directly as model IDs. Application inference profiles are custom routing configurations for specific use cases. When disabled, only standard model IDs and configured profiles are accepted."
+  type        = bool
+  default     = null
+}
+
+variable "aws_bedrock_allow_prompt_router_arn" {
+  description = "If True, allow users to pass prompt router ARNs directly as model IDs. Prompt routers enable dynamic model selection based on prompt characteristics. When disabled, only standard model IDs and configured profiles are accepted."
+  type        = bool
+  default     = null
+}
+
+variable "aws_bedrock_model_arn_mapping" {
+  description = <<-EOT
+    Map standard model IDs to custom inference profile or prompt router ARNs. This allows server administrators to override the default cross-region inference profiles with custom application inference profiles, cross-region inference profiles, or prompt routers.
+
+    Supported ARN types:
+    - Cross-region inference profile: arn:aws:bedrock:REGION:ACCOUNT:inference-profile/ID
+    - Application inference profile: arn:aws:bedrock:REGION:ACCOUNT:application-inference-profile/ID
+    - Prompt router: arn:aws:bedrock:REGION:ACCOUNT:default-prompt-router/ID
+
+    Example: {
+      "anthropic.claude-3-5-sonnet-20241022-v2:0" = "arn:aws:bedrock:us-east-1:123456789012:application-inference-profile/my-custom-profile"
+      "anthropic.claude-3-5-haiku-20241022-v1:0" = "arn:aws:bedrock:us-east-1:123456789012:default-prompt-router/my-router"
+    }
+  EOT
+  type        = map(string)
+  default     = {}
+}
+
 variable "aws_s3_accelerate" {
   description = "Enable S3 Transfer Acceleration for presigned URLs. Default to false."
   type        = bool
@@ -325,7 +361,7 @@ variable "model_cache_seconds" {
 variable "version_to_deploy" {
   description = "Container image version tag from AWS Marketplace. Leave unset to automatically use the latest stable version. Only override for testing or rollback purposes."
   type        = string
-  default     = "1.0.3"
+  default     = "1.1.0"
 }
 
 # KMS configuration
