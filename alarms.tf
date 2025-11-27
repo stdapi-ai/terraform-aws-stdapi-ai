@@ -29,6 +29,6 @@ resource "aws_cloudwatch_metric_alarm" "error_critical_logs" {
   statistic           = "Sum"
   threshold           = 0
   alarm_description   = "This metric monitors ERROR and CRITICAL level logs in the application"
-  alarm_actions       = [var.sns_topic_arn]
+  alarm_actions       = var.sns_topic_arn != null ? [var.sns_topic_arn] : null
   treat_missing_data  = "notBreaching"
 }
