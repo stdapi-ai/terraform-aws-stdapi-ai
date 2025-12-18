@@ -142,13 +142,14 @@ data "aws_iam_policy_document" "server" {
     resources = ["*"]
   }
 
-  # Bedrock - Model Invocation (Always Required)
+  # Bedrock - Model & Tool Invocation (Always Required)
   statement {
     sid = "BedrockModelInvoke"
     actions = [
       "bedrock:GetAsyncInvoke",
       "bedrock:InvokeModel",
       "bedrock:InvokeModelWithResponseStream",
+      "bedrock:InvokeTool",
     ]
     resources = ["*"]
   }

@@ -361,7 +361,7 @@ variable "model_cache_seconds" {
 variable "version_to_deploy" {
   description = "Container image version tag from AWS Marketplace. Leave unset to automatically use the latest stable version. Only override for testing or rollback purposes."
   type        = string
-  default     = "1.1.0"
+  default     = "1.2.0"
 }
 
 # KMS configuration
