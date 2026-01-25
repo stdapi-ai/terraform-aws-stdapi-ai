@@ -101,12 +101,12 @@ module "server" {
       secrets = var.api_key != null || var.api_key_create ? {
         API_KEY = var.api_key != null ? var.api_key : random_password.api_key[0].result
       } : null
-      port_mappings = var.alb_enabled ? {
+      port_mappings = {
         http = {
           container_port    = local.port
-          target_group_arns = [aws_lb_target_group.main[0].arn]
+          target_group_arns = var.alb_enabled ? [aws_lb_target_group.main[0].arn] : null
         }
-      } : null
+      }
       health_check = {
         command      = ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:${local.port}/health', timeout=5)"]
         interval     = 30
