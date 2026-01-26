@@ -292,6 +292,12 @@ variable "default_tts_model" {
   }
 }
 
+variable "default_tts_language" {
+  description = "Default text-to-speech language to use if not specified in the request. Default to language autodetection."
+  type        = string
+  default     = null
+}
+
 variable "tokens_estimation" {
   description = "If True, estimate the number of tokens using a tokenizer when not directly returned by the model. Default to false."
   type        = bool
@@ -361,7 +367,7 @@ variable "model_cache_seconds" {
 variable "version_to_deploy" {
   description = "Container image version tag from AWS Marketplace. Leave unset to automatically use the latest stable version. Only override for testing or rollback purposes."
   type        = string
-  default     = "1.3.1"
+  default     = "1.3.2"
 }
 
 # KMS configuration
