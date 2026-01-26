@@ -4,7 +4,7 @@ Server on ECS
 
 module "server" {
   source                            = "JGoutin/ecs-fargate/aws"
-  version                           = "~> 1.1"
+  version                           = "~> 1.2"
   kms_key_id                        = module.kms_key.id
   kms_policy_dependency             = module.kms_key.policy_dependency
   subnets_ids                       = module.vpc.subnets_ids
@@ -17,6 +17,7 @@ module "server" {
   cpu                               = var.cpu
   memory                            = var.memory
   assign_public_ip                  = local.internet_access_required && !var.nat_gateways_allowed
+  deletion_protection               = var.deletion_protection
 
   # Service Discovery
   service_discovery_dns_namespace_id = var.service_discovery_dns_namespace_id
