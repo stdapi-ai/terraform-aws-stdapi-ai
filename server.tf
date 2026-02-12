@@ -98,7 +98,8 @@ module "server" {
           AWS_BEDROCK_MODEL_ARN_MAPPING = var.aws_bedrock_model_arn_mapping
           CORS_ALLOW_ORIGINS            = var.cors_allow_origins
           TRUSTED_HOSTS                 = var.trusted_hosts
-        } : k => jsonencode(v) if v != null && (k != "AWS_BEDROCK_MODEL_ARN_MAPPING" || length(v) > 0) }
+          MODEL_ALIASES                 = var.model_aliases
+        } : k => jsonencode(v) if v != null }
       )
       secrets = var.api_key != null || var.api_key_create ? {
         API_KEY = var.api_key != null ? var.api_key : random_password.api_key[0].result

@@ -74,7 +74,7 @@ variable "aws_bedrock_model_arn_mapping" {
     }
   EOT
   type        = map(string)
-  default     = {}
+  default     = null
 }
 
 variable "aws_s3_accelerate" {
@@ -364,10 +364,26 @@ variable "model_cache_seconds" {
   default     = null
 }
 
+variable "model_aliases" {
+  description = <<-EOT
+    Map of model aliases to actual model IDs.
+    Allows users to reference models using custom alias names.
+    This is merged with default system aliases at startup.
+    User-provided aliases take precedence over system defaults.
+
+    Example: {
+      "my-tts": "amazon.polly-neural",
+      "my-stt": "amazon.transcribe"
+    }
+  EOT
+  type        = map(string)
+  default     = null
+}
+
 variable "version_to_deploy" {
   description = "Container image version tag from AWS Marketplace. Leave unset to automatically use the latest stable version. Only override for testing or rollback purposes."
   type        = string
-  default     = "1.3.5"
+  default     = "1.4.0"
 }
 
 # KMS configuration
