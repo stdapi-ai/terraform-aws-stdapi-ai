@@ -298,6 +298,12 @@ variable "default_tts_language" {
   default     = null
 }
 
+variable "drop_unsupported_system_prompt" {
+  description = "If true, system prompts are silently dropped when models don't support them. If false, an error is returned when a system prompt is passed to a model that doesn't support system prompts (e.g., mistral.mistral-7b models). Default: true for backward compatibility."
+  type        = bool
+  default     = null
+}
+
 variable "tokens_estimation" {
   description = "If True, estimate the number of tokens using a tokenizer when not directly returned by the model. Default to false."
   type        = bool
@@ -383,7 +389,7 @@ variable "model_aliases" {
 variable "version_to_deploy" {
   description = "Container image version tag from AWS Marketplace. Leave unset to automatically use the latest stable version. Only override for testing or rollback purposes."
   type        = string
-  default     = "1.4.0"
+  default     = "1.5.0"
 }
 
 # KMS configuration

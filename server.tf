@@ -92,6 +92,7 @@ module "server" {
           ENABLE_GZIP                                          = var.enable_gzip
           SSRF_PROTECTION_BLOCK_PRIVATE_NETWORKS               = var.ssrf_protection_block_private_networks
           MODEL_CACHE_SECONDS                                  = var.model_cache_seconds
+          DROP_UNSUPPORTED_SYSTEM_PROMPT                       = var.drop_unsupported_system_prompt
         } : k => tostring(v) if v != null },
         { for k, v in {
           AWS_S3_REGIONAL_BUCKETS       = var.aws_s3_regional_buckets
