@@ -59,6 +59,7 @@ module "server" {
           AWS_TRANSLATE_REGION               = var.aws_translate_region
           TIMEZONE                           = var.timezone
           OPENAI_ROUTES_PREFIX               = var.openai_routes_prefix
+          ANTHROPIC_ROUTES_PREFIX            = var.anthropic_routes_prefix
           API_KEY_SSM_PARAMETER              = var.api_key_ssm_parameter
           API_KEY_SECRETSMANAGER_SECRET      = var.api_key_secretsmanager_secret
           API_KEY_SECRETSMANAGER_KEY         = var.api_key_secretsmanager_key
@@ -69,6 +70,7 @@ module "server" {
           DEFAULT_TTS_MODEL                  = var.default_tts_model
           DEFAULT_TTS_LANGUAGE               = var.default_tts_language
           TOKENS_ESTIMATION_DEFAULT_ENCODING = var.tokens_estimation_default_encoding
+          ANTHROPIC_BETA_ALLOWLIST           = var.anthropic_beta_allowlist
         } : k => v if v != null },
         { for k, v in {
           AWS_S3_ACCELERATE                                    = var.aws_s3_accelerate
@@ -93,6 +95,8 @@ module "server" {
           SSRF_PROTECTION_BLOCK_PRIVATE_NETWORKS               = var.ssrf_protection_block_private_networks
           MODEL_CACHE_SECONDS                                  = var.model_cache_seconds
           DROP_UNSUPPORTED_SYSTEM_PROMPT                       = var.drop_unsupported_system_prompt
+          AWS_BEDROCK_ALLOW_GUARDRAIL_OVERRIDE                 = var.aws_bedrock_allow_guardrail_override
+          ANTHROPIC_BETA_FILTER                                = var.anthropic_beta_filter
         } : k => tostring(v) if v != null },
         { for k, v in {
           AWS_S3_REGIONAL_BUCKETS       = var.aws_s3_regional_buckets
@@ -150,6 +154,7 @@ data "aws_iam_policy_document" "server" {
   statement {
     sid = "BedrockModelInvoke"
     actions = [
+      "bedrock:CountTokens",
       "bedrock:GetAsyncInvoke",
       "bedrock:InvokeModel",
       "bedrock:InvokeModelWithResponseStream",

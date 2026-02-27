@@ -183,6 +183,30 @@ variable "openai_routes_prefix" {
   default     = null
 }
 
+variable "anthropic_routes_prefix" {
+  description = "Anthropic API compatible routes prefix. Default to '/anthropic'."
+  type        = string
+  default     = null
+}
+
+variable "aws_bedrock_allow_guardrail_override" {
+  description = "Allow users to override the global guardrail configuration at request level using headers (X-Amzn-Bedrock-GuardrailIdentifier, X-Amzn-Bedrock-GuardrailVersion, X-Amzn-Bedrock-Trace). When disabled and a global guardrail is configured, request headers are ignored for security. Defaults to false for security."
+  type        = bool
+  default     = null
+}
+
+variable "anthropic_beta_filter" {
+  description = "Enable filtering of unsupported anthropic_beta flags for Anthropic Claude models. When enabled, flags not in the allowlist are silently removed to prevent Bedrock ValidationException errors. Default to true."
+  type        = bool
+  default     = null
+}
+
+variable "anthropic_beta_allowlist" {
+  description = "Additional anthropic_beta flags to allow beyond the built-in defaults. Comma-separated string. Merged with the built-in set of Bedrock-supported flags. Only effective when anthropic_beta_filter is true."
+  type        = string
+  default     = null
+}
+
 variable "api_key_create" {
   description = "If true, generate and return an API key using the 'api_key' output. When specified, all API requests must include this key. Mutually exclusive with api_key, api_key_ssm_parameter, and api_key_secretsmanager_secret."
   type        = bool
@@ -389,7 +413,7 @@ variable "model_aliases" {
 variable "version_to_deploy" {
   description = "Container image version tag from AWS Marketplace. Leave unset to automatically use the latest stable version. Only override for testing or rollback purposes."
   type        = string
-  default     = "1.5.2"
+  default     = "1.6.0"
 }
 
 # KMS configuration
