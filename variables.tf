@@ -14,6 +14,24 @@ variable "aws_s3_bucket_create" {
   default     = true
 }
 
+variable "aws_adaptive_retry" {
+  description = "Enable adaptive retry mode for all AWS service calls. When enabled, the client dynamically adjusts its retry behavior based on observed error rates, slowing down when a service appears congested. Default to false."
+  type        = bool
+  default     = null
+}
+
+variable "aws_max_pool_connections" {
+  description = "Maximum number of concurrent HTTP connections per AWS service client. Each AWS service client (per region) maintains its own connection pool up to this limit. Increase if you observe connection pool exhaustion under high concurrency. Default to 50."
+  type        = number
+  default     = null
+}
+
+variable "aws_connect_timeout" {
+  description = "Timeout in seconds for establishing a connection to an AWS service endpoint. Keeping this value short allows fast failover to another region when a connection cannot be established. Default to 5."
+  type        = number
+  default     = null
+}
+
 variable "aws_s3_bucket" {
   description = "Existing S3 bucket name for storing generated files and application data. When specified, takes precedence over aws_s3_bucket_create. If not specified and aws_s3_bucket_create is true, a bucket will be created automatically."
   type        = string
@@ -101,6 +119,74 @@ variable "aws_bedrock_regions" {
   default     = null
 }
 
+variable "aws_bedrock_region_routing" {
+  description = "Automatic region routing strategy for Bedrock invocations. Distributes requests across configured regions to handle quota limits and regional unavailability. Strategies: 'disabled' (no routing), 'ordered' (try regions in configured order, default), 'lowest_latency' (prefer region with lowest measured latency), 'round_robin' (distribute evenly, incompatible with prompt caching). Requires at least 2 regions in aws_bedrock_regions."
+  type        = string
+  default     = null
+  validation {
+    condition     = var.aws_bedrock_region_routing == null || contains(["disabled", "ordered", "lowest_latency", "round_robin"], var.aws_bedrock_region_routing)
+    error_message = "Must be one of: disabled, ordered, lowest_latency, round_robin, or null."
+  }
+}
+
+variable "aws_bedrock_region_routing_quota_backoff_seconds" {
+  description = "Seconds to avoid a region after receiving a quota/throttling error. Only effective when aws_bedrock_region_routing is not 'disabled'. Default to 60."
+  type        = number
+  default     = null
+}
+
+variable "aws_bedrock_region_routing_unavailable_backoff_seconds" {
+  description = "Seconds to avoid a region after receiving an unavailability error. Only effective when aws_bedrock_region_routing is not 'disabled'. Default to 30."
+  type        = number
+  default     = null
+}
+
+variable "aws_bedrock_region_routing_max_quota_backoff_seconds" {
+  description = "Hard ceiling in seconds on the exponential quota backoff for a single region. Quota backoff doubles on each consecutive error; this value caps how high it can grow. Only effective when aws_bedrock_region_routing is not 'disabled'. Default to 3600 (1 hour)."
+  type        = number
+  default     = null
+}
+
+variable "aws_bedrock_region_routing_quota_stale_factor" {
+  description = "Multiplier applied to the max quota backoff to compute the stale-error threshold. If the most recent quota error for a region is older than (max_quota_backoff * factor) seconds, the consecutive-error counter is reset. Only effective when aws_bedrock_region_routing is not 'disabled'. Default to 2."
+  type        = number
+  default     = null
+}
+
+variable "aws_bedrock_max_retries" {
+  description = "Maximum number of retries for Bedrock invocations. When region routing is enabled, retries cycle through all available regions. Default to 9."
+  type        = number
+  default     = null
+}
+
+variable "aws_s3_accepted_buckets" {
+  description = <<-EOT
+    S3 buckets that the application has read access to, mapped to their region. These buckets can be used as input S3 data sources, and S3 HTTP URLs (including presigned URLs) for these buckets will be automatically converted to S3 URIs for direct access.
+
+    Keys are bucket names, values are AWS region identifiers.
+
+    Example: { "my-data-bucket" = "us-east-1", "my-eu-bucket" = "eu-west-1" }
+
+    If not specified, only the application's own S3 buckets (aws_s3_bucket and aws_s3_regional_buckets) are recognized for S3 URI conversion.
+  EOT
+  type        = map(string)
+  default     = null
+}
+
+variable "aws_bedrock_model_region_restrict" {
+  description = <<-EOT
+    Restrict a model to specific region(s) only. Can be used when a model provides important features only in certain regions.
+
+    Keys are Bedrock model IDs (or prefixes), values are ordered lists of allowed regions. When set, the model will only be available in the listed regions (intersected with the regions where it is actually available).
+
+    Example: { "amazon.nova-pro-v1:0" = ["us-east-1"] }
+
+    Use case: Nova grounding is only available in us-east-1, so restricting nova-pro to us-east-1 ensures grounding always works.
+  EOT
+  type        = map(list(string))
+  default     = null
+}
+
 variable "aws_bedrock_cross_region_inference" {
   description = "If true, allow cross region inference to be used. Default to true."
   type        = bool
@@ -116,6 +202,24 @@ variable "aws_bedrock_cross_region_inference_global" {
 variable "aws_bedrock_legacy" {
   description = "If true, allow legacy Bedrock models to be used. Default to true."
   type        = bool
+  default     = null
+}
+
+variable "aws_bedrock_deprecated_model_fallback" {
+  description = "If true, requests that use a deprecated model ID are transparently retried with the recommended replacement model instead of returning a 404 error. Disable if you want deprecated model IDs to fail explicitly so clients are forced to migrate. Default to true."
+  type        = bool
+  default     = null
+}
+
+variable "aws_bedrock_deprecated_models" {
+  description = <<-EOT
+    Additional deprecated model ID mappings, merged with the built-in deprecation registry at startup. User-provided entries take precedence over built-in ones.
+
+    Keys are deprecated model IDs, values are the recommended replacement model IDs.
+
+    Example: { "my-old-model-v1" = "my-new-model-v2" }
+  EOT
+  type        = map(string)
   default     = null
 }
 
@@ -413,7 +517,7 @@ variable "model_aliases" {
 variable "version_to_deploy" {
   description = "Container image version tag from AWS Marketplace. Leave unset to automatically use the latest stable version. Only override for testing or rollback purposes."
   type        = string
-  default     = "1.6.0"
+  default     = "1.7.0"
 }
 
 # KMS configuration
