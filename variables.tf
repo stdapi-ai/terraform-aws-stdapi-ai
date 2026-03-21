@@ -173,6 +173,12 @@ variable "aws_s3_accepted_buckets" {
   default     = null
 }
 
+variable "aws_s3_accepted_buckets_kms_key_arn" {
+  description = "List of KMS key ARNs used to encrypt the accepted S3 buckets (var.aws_s3_accepted_buckets). Required to grant the server permissions to decrypt objects from KMS-encrypted accepted buckets."
+  type        = list(string)
+  default     = null
+}
+
 variable "aws_bedrock_model_region_restrict" {
   description = <<-EOT
     Restrict a model to specific region(s) only. Can be used when a model provides important features only in certain regions.

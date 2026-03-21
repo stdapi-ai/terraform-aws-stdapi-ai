@@ -46,77 +46,77 @@ module "server" {
       image = local.container_image
       environment = merge(
         { for k, v in {
-          AWS_S3_BUCKET                                          = local.s3_bucket_name
-          AWS_POLLY_REGION                                       = var.aws_polly_region
-          AWS_COMPREHEND_REGION                                  = var.aws_comprehend_region
-          AWS_BEDROCK_REGIONS                                    = var.aws_bedrock_regions != null ? join(",", var.aws_bedrock_regions) : null
-          AWS_BEDROCK_GUARDRAIL_IDENTIFIER                       = var.aws_bedrock_guardrail_identifier
-          AWS_BEDROCK_GUARDRAIL_VERSION                          = var.aws_bedrock_guardrail_version
-          AWS_BEDROCK_GUARDRAIL_TRACE                            = var.aws_bedrock_guardrail_trace
-          AWS_TRANSCRIBE_REGION                                  = var.aws_transcribe_region
-          AWS_TRANSCRIBE_S3_BUCKET                               = var.aws_transcribe_s3_bucket
-          AWS_S3_TMP_PREFIX                                      = var.aws_s3_tmp_prefix
-          AWS_TRANSLATE_REGION                                   = var.aws_translate_region
-          TIMEZONE                                               = var.timezone
-          OPENAI_ROUTES_PREFIX                                   = var.openai_routes_prefix
-          ANTHROPIC_ROUTES_PREFIX                                = var.anthropic_routes_prefix
-          API_KEY_SSM_PARAMETER                                  = var.api_key_ssm_parameter
-          API_KEY_SECRETSMANAGER_SECRET                          = var.api_key_secretsmanager_secret
-          API_KEY_SECRETSMANAGER_KEY                             = var.api_key_secretsmanager_key
-          OTEL_SERVICE_NAME                                      = var.otel_service_name
-          OTEL_EXPORTER_ENDPOINT                                 = var.otel_exporter_endpoint
-          LOG_LEVEL                                              = var.log_level
-          DEFAULT_MODEL_PARAMS                                   = var.default_model_params
-          DEFAULT_TTS_MODEL                                      = var.default_tts_model
-          DEFAULT_TTS_LANGUAGE                                   = var.default_tts_language
-          TOKENS_ESTIMATION_DEFAULT_ENCODING                     = var.tokens_estimation_default_encoding
-          ANTHROPIC_BETA_ALLOWLIST                               = var.anthropic_beta_allowlist
-          AWS_BEDROCK_REGION_ROUTING                             = var.aws_bedrock_region_routing
+          AWS_S3_BUCKET                      = local.s3_bucket_name
+          AWS_POLLY_REGION                   = var.aws_polly_region
+          AWS_COMPREHEND_REGION              = var.aws_comprehend_region
+          AWS_BEDROCK_REGIONS                = var.aws_bedrock_regions != null ? join(",", var.aws_bedrock_regions) : null
+          AWS_BEDROCK_GUARDRAIL_IDENTIFIER   = var.aws_bedrock_guardrail_identifier
+          AWS_BEDROCK_GUARDRAIL_VERSION      = var.aws_bedrock_guardrail_version
+          AWS_BEDROCK_GUARDRAIL_TRACE        = var.aws_bedrock_guardrail_trace
+          AWS_TRANSCRIBE_REGION              = var.aws_transcribe_region
+          AWS_TRANSCRIBE_S3_BUCKET           = var.aws_transcribe_s3_bucket
+          AWS_S3_TMP_PREFIX                  = var.aws_s3_tmp_prefix
+          AWS_TRANSLATE_REGION               = var.aws_translate_region
+          TIMEZONE                           = var.timezone
+          OPENAI_ROUTES_PREFIX               = var.openai_routes_prefix
+          ANTHROPIC_ROUTES_PREFIX            = var.anthropic_routes_prefix
+          API_KEY_SSM_PARAMETER              = var.api_key_ssm_parameter
+          API_KEY_SECRETSMANAGER_SECRET      = var.api_key_secretsmanager_secret
+          API_KEY_SECRETSMANAGER_KEY         = var.api_key_secretsmanager_key
+          OTEL_SERVICE_NAME                  = var.otel_service_name
+          OTEL_EXPORTER_ENDPOINT             = var.otel_exporter_endpoint
+          LOG_LEVEL                          = var.log_level
+          DEFAULT_MODEL_PARAMS               = var.default_model_params
+          DEFAULT_TTS_MODEL                  = var.default_tts_model
+          DEFAULT_TTS_LANGUAGE               = var.default_tts_language
+          TOKENS_ESTIMATION_DEFAULT_ENCODING = var.tokens_estimation_default_encoding
+          ANTHROPIC_BETA_ALLOWLIST           = var.anthropic_beta_allowlist
+          AWS_BEDROCK_REGION_ROUTING         = var.aws_bedrock_region_routing
         } : k => v if v != null },
         { for k, v in {
-          AWS_S3_ACCELERATE                                    = var.aws_s3_accelerate
-          AWS_BEDROCK_CROSS_REGION_INFERENCE                   = var.aws_bedrock_cross_region_inference
-          AWS_BEDROCK_CROSS_REGION_INFERENCE_GLOBAL            = var.aws_bedrock_cross_region_inference_global
-          AWS_BEDROCK_LEGACY                                   = var.aws_bedrock_legacy
-          AWS_BEDROCK_MARKETPLACE_AUTO_SUBSCRIBE               = var.aws_bedrock_marketplace_auto_subscribe
-          AWS_BEDROCK_ALLOW_CROSS_REGION_INFERENCE_PROFILE_ARN = var.aws_bedrock_allow_cross_region_inference_profile_arn
-          AWS_BEDROCK_ALLOW_APPLICATION_INFERENCE_PROFILE_ARN  = var.aws_bedrock_allow_application_inference_profile_arn
-          AWS_BEDROCK_ALLOW_PROMPT_ROUTER_ARN                  = var.aws_bedrock_allow_prompt_router_arn
-          OTEL_ENABLED                                         = var.otel_enabled
-          OTEL_SAMPLE_RATE                                     = var.otel_sample_rate
-          LOG_REQUEST_PARAMS                                   = var.log_request_params
-          LOG_CLIENT_IP                                        = var.log_client_ip
-          STRICT_INPUT_VALIDATION                              = var.strict_input_validation
-          TOKENS_ESTIMATION                                    = var.tokens_estimation
-          ENABLE_DOCS                                          = var.enable_docs
-          ENABLE_REDOC                                         = var.enable_redoc
-          ENABLE_OPENAPI_JSON                                  = var.enable_openapi_json
-          ENABLE_PROXY_HEADERS                                 = (var.enable_proxy_headers != null || (var.alb_enabled && var.log_client_ip == true)) ? true : null
-          ENABLE_GZIP                                          = var.enable_gzip
-          SSRF_PROTECTION_BLOCK_PRIVATE_NETWORKS               = var.ssrf_protection_block_private_networks
-          MODEL_CACHE_SECONDS                                  = var.model_cache_seconds
-          DROP_UNSUPPORTED_SYSTEM_PROMPT                       = var.drop_unsupported_system_prompt
-          AWS_BEDROCK_ALLOW_GUARDRAIL_OVERRIDE                 = var.aws_bedrock_allow_guardrail_override
-          ANTHROPIC_BETA_FILTER                                = var.anthropic_beta_filter
-          AWS_ADAPTIVE_RETRY                                   = var.aws_adaptive_retry
-          AWS_MAX_POOL_CONNECTIONS                             = var.aws_max_pool_connections
-          AWS_CONNECT_TIMEOUT                                  = var.aws_connect_timeout
-          AWS_BEDROCK_REGION_ROUTING_QUOTA_BACKOFF_SECONDS     = var.aws_bedrock_region_routing_quota_backoff_seconds
+          AWS_S3_ACCELERATE                                      = var.aws_s3_accelerate
+          AWS_BEDROCK_CROSS_REGION_INFERENCE                     = var.aws_bedrock_cross_region_inference
+          AWS_BEDROCK_CROSS_REGION_INFERENCE_GLOBAL              = var.aws_bedrock_cross_region_inference_global
+          AWS_BEDROCK_LEGACY                                     = var.aws_bedrock_legacy
+          AWS_BEDROCK_MARKETPLACE_AUTO_SUBSCRIBE                 = var.aws_bedrock_marketplace_auto_subscribe
+          AWS_BEDROCK_ALLOW_CROSS_REGION_INFERENCE_PROFILE_ARN   = var.aws_bedrock_allow_cross_region_inference_profile_arn
+          AWS_BEDROCK_ALLOW_APPLICATION_INFERENCE_PROFILE_ARN    = var.aws_bedrock_allow_application_inference_profile_arn
+          AWS_BEDROCK_ALLOW_PROMPT_ROUTER_ARN                    = var.aws_bedrock_allow_prompt_router_arn
+          OTEL_ENABLED                                           = var.otel_enabled
+          OTEL_SAMPLE_RATE                                       = var.otel_sample_rate
+          LOG_REQUEST_PARAMS                                     = var.log_request_params
+          LOG_CLIENT_IP                                          = var.log_client_ip
+          STRICT_INPUT_VALIDATION                                = var.strict_input_validation
+          TOKENS_ESTIMATION                                      = var.tokens_estimation
+          ENABLE_DOCS                                            = var.enable_docs
+          ENABLE_REDOC                                           = var.enable_redoc
+          ENABLE_OPENAPI_JSON                                    = var.enable_openapi_json
+          ENABLE_PROXY_HEADERS                                   = (var.enable_proxy_headers != null || (var.alb_enabled && var.log_client_ip == true)) ? true : null
+          ENABLE_GZIP                                            = var.enable_gzip
+          SSRF_PROTECTION_BLOCK_PRIVATE_NETWORKS                 = var.ssrf_protection_block_private_networks
+          MODEL_CACHE_SECONDS                                    = var.model_cache_seconds
+          DROP_UNSUPPORTED_SYSTEM_PROMPT                         = var.drop_unsupported_system_prompt
+          AWS_BEDROCK_ALLOW_GUARDRAIL_OVERRIDE                   = var.aws_bedrock_allow_guardrail_override
+          ANTHROPIC_BETA_FILTER                                  = var.anthropic_beta_filter
+          AWS_ADAPTIVE_RETRY                                     = var.aws_adaptive_retry
+          AWS_MAX_POOL_CONNECTIONS                               = var.aws_max_pool_connections
+          AWS_CONNECT_TIMEOUT                                    = var.aws_connect_timeout
+          AWS_BEDROCK_REGION_ROUTING_QUOTA_BACKOFF_SECONDS       = var.aws_bedrock_region_routing_quota_backoff_seconds
           AWS_BEDROCK_REGION_ROUTING_UNAVAILABLE_BACKOFF_SECONDS = var.aws_bedrock_region_routing_unavailable_backoff_seconds
-          AWS_BEDROCK_REGION_ROUTING_MAX_QUOTA_BACKOFF_SECONDS = var.aws_bedrock_region_routing_max_quota_backoff_seconds
-          AWS_BEDROCK_REGION_ROUTING_QUOTA_STALE_FACTOR        = var.aws_bedrock_region_routing_quota_stale_factor
-          AWS_BEDROCK_MAX_RETRIES                              = var.aws_bedrock_max_retries
-          AWS_BEDROCK_DEPRECATED_MODEL_FALLBACK                = var.aws_bedrock_deprecated_model_fallback
+          AWS_BEDROCK_REGION_ROUTING_MAX_QUOTA_BACKOFF_SECONDS   = var.aws_bedrock_region_routing_max_quota_backoff_seconds
+          AWS_BEDROCK_REGION_ROUTING_QUOTA_STALE_FACTOR          = var.aws_bedrock_region_routing_quota_stale_factor
+          AWS_BEDROCK_MAX_RETRIES                                = var.aws_bedrock_max_retries
+          AWS_BEDROCK_DEPRECATED_MODEL_FALLBACK                  = var.aws_bedrock_deprecated_model_fallback
         } : k => tostring(v) if v != null },
         { for k, v in {
-          AWS_S3_REGIONAL_BUCKETS            = var.aws_s3_regional_buckets
-          AWS_BEDROCK_MODEL_ARN_MAPPING      = var.aws_bedrock_model_arn_mapping
-          CORS_ALLOW_ORIGINS                 = var.cors_allow_origins
-          TRUSTED_HOSTS                      = var.trusted_hosts
-          MODEL_ALIASES                      = var.model_aliases
-          AWS_S3_ACCEPTED_BUCKETS            = var.aws_s3_accepted_buckets
-          AWS_BEDROCK_MODEL_REGION_RESTRICT  = var.aws_bedrock_model_region_restrict
-          AWS_BEDROCK_DEPRECATED_MODELS      = var.aws_bedrock_deprecated_models
+          AWS_S3_REGIONAL_BUCKETS           = var.aws_s3_regional_buckets
+          AWS_BEDROCK_MODEL_ARN_MAPPING     = var.aws_bedrock_model_arn_mapping
+          CORS_ALLOW_ORIGINS                = var.cors_allow_origins
+          TRUSTED_HOSTS                     = var.trusted_hosts
+          MODEL_ALIASES                     = var.model_aliases
+          AWS_S3_ACCEPTED_BUCKETS           = var.aws_s3_accepted_buckets
+          AWS_BEDROCK_MODEL_REGION_RESTRICT = var.aws_bedrock_model_region_restrict
+          AWS_BEDROCK_DEPRECATED_MODELS     = var.aws_bedrock_deprecated_models
         } : k => jsonencode(v) if v != null }
       )
       secrets = var.api_key != null || var.api_key_create ? {
@@ -240,6 +240,18 @@ data "aws_iam_policy_document" "server" {
     }
   }
 
+  # S3 - Accepted Buckets for Input Data (Optional)
+  dynamic "statement" {
+    for_each = var.aws_s3_accepted_buckets != null ? [1] : []
+    content {
+      sid     = "S3AcceptedBuckets"
+      actions = ["s3:GetObject"]
+      resources = [
+        for bucket in keys(var.aws_s3_accepted_buckets) : "arn:aws:s3:::${bucket}/*"
+      ]
+    }
+  }
+
   # S3 - Regional Buckets for Bedrock (Optional)
   dynamic "statement" {
     for_each = var.aws_s3_regional_buckets != null ? [1] : []
@@ -284,6 +296,21 @@ data "aws_iam_policy_document" "server" {
         "kms:GenerateDataKey"
       ]
       resources = var.aws_s3_buckets_kms_keys_arns
+      condition {
+        test     = "StringLike"
+        variable = "kms:ViaService"
+        values   = ["s3.*.amazonaws.com"]
+      }
+    }
+  }
+
+  # KMS - Accepted S3 Buckets Encryption (Optional)
+  dynamic "statement" {
+    for_each = var.aws_s3_accepted_buckets_kms_key_arn != null ? [1] : []
+    content {
+      sid       = "KMSAcceptedBuckets"
+      actions   = ["kms:Decrypt"]
+      resources = var.aws_s3_accepted_buckets_kms_key_arn
       condition {
         test     = "StringLike"
         variable = "kms:ViaService"
