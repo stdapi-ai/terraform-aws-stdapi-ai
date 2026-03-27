@@ -1,63 +1,23 @@
-# stdapi.ai - AWS Marketplace Terraform Module
+# stdapi.ai - Terraform Module for AWS
 
-**Production-ready OpenAI & Anthropic Compatible API Gateway for Amazon Bedrock and AWS AI services** - Deploy in minutes with enterprise-grade security and compliance.
+**Deploy an OpenAI & Anthropic compatible AI gateway on AWS in minutes.** Production-ready ECS Fargate infrastructure with HTTPS, WAF, auto-scaling, and monitoring — all from a single Terraform module.
 
-## What is stdapi.ai?
+🌐 [Documentation](https://stdapi.ai) · 🚀 [Start 14-Day Free Trial](https://stdapi.ai/operations_getting_started/) · 💻 [GitHub Repository](https://github.com/stdapi-ai/stdapi.ai)
 
-**stdapi.ai** is a production-ready OpenAI & Anthropic compatible API gateway available on AWS Marketplace. This Terraform module provides complete infrastructure-as-code to deploy stdapi.ai on AWS with best practices for security, scalability, and observability.
-
-Deploy any OpenAI or Anthropic-compatible application on AWS Bedrock—no code changes required. Works with LangChain, Continue.dev, Open WebUI, n8n, and 1000+ OpenAI/Anthropic-compatible tools.
-
-🌐 **Documentation**: [stdapi.ai](https://stdapi.ai) - Complete guides, API reference, and integration examples
-
-🛒 **AWS Marketplace**: [Subscribe to stdapi.ai](https://aws.amazon.com/marketplace/pp/prodview-su2dajk5zawpo) - Commercial license with hardened containers
-
-## Why Choose stdapi.ai?
-
-- **🔌 Production-Ready Compatibility** - Full OpenAI & Anthropic API support: chat, embeddings, images, audio (speech/transcription/translation)
-- **🧠 80+ Leading Models** - Claude 4.6+ (reasoning), Nova 2, Llama 4, DeepSeek v3.2, Stable Diffusion, Mistral, Gemini, and more
-- **🎨 Comprehensive AI Services** - Amazon Polly (TTS), Transcribe (STT with diarization), Translate unified under OpenAI API
-- **⚡ Advanced Features** - Reasoning modes, prompt caching, guardrails, multi-region routing with configurable strategies (ordered, lowest-latency, round-robin) and automatic failover, application inference profiles
-- **🔒 Enterprise Compliance** - Data sovereignty controls, AWS region configuration, GDPR/HIPAA/FedRAMP ready
-- **📊 Built-in Observability** - OpenTelemetry integration, CloudWatch monitoring, detailed request logging
-
-## Module Features
-
-This Terraform module provides production-ready infrastructure following AWS Well-Architected Framework:
-
-- **🚀 Serverless Compute**: ECS Fargate with intelligent auto-scaling (0.25-16 vCPU, CPU/Memory/Request-based)
-- **⚖️ Load Balancing**: Application Load Balancer with HTTPS/TLS, configurable idle timeout for long operations
-- **🌐 Networking**: VPC with public/private subnets, VPC endpoints for AWS services, IPv4/IPv6 support
-- **🔒 Security**: WAF with rate limiting & IP filtering, KMS encryption, IAM roles with least privilege
-- **📊 Monitoring**: CloudWatch dashboards, intelligent alarms, VPC Flow Logs, request/response logging
-- **💾 Storage**: S3 buckets with encryption, versioning, lifecycle policies, multi-region support
-- **💰 Cost Optimization**: Fargate Spot support (~70% discount), scheduled auto-scaling, resource right-sizing
-
-## Getting Started
-
-📖 **[Complete Getting Started Guide →](https://stdapi.ai/operations_getting_started/)**
-
-The guide includes multiple deployment scenarios:
-
-- **⚡ Quick Start** - Deploy in 15 minutes with minimal configuration (perfect for testing)
-- **🏢 Production Deployment** - Enterprise-ready setup with HTTPS, custom domain, WAF, and comprehensive monitoring
-- **💰 Cost-Optimized** - Ultra-low cost configuration for development and staging environments
-- **🔗 Integration Examples** - Deploy into existing VPC, use existing S3 buckets, custom networking
-- **🌍 Multi-Region Setup** - Configure regional S3 buckets for Amazon Bedrock multimodal operations
+## Quick Start
 
 ### Prerequisites
 
-1. **📦 AWS Marketplace Subscription** - [Subscribe to stdapi.ai](https://aws.amazon.com/marketplace/pp/prodview-su2dajk5zawpo) (free trial available)
-2. **🔧 Terraform or OpenTofu** - Install [Terraform](https://www.terraform.io/downloads) or [OpenTofu](https://opentofu.org/docs/intro/install/) >= 1.5
-3. **🔑 AWS Credentials** - Configure [AWS credentials](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-files.html) with appropriate permissions
+1. **[Subscribe to stdapi.ai](https://aws.amazon.com/marketplace/pp/prodview-su2dajk5zawpo)** on AWS Marketplace (14-day free trial included)
+2. Install [Terraform](https://www.terraform.io/downloads) or [OpenTofu](https://opentofu.org/docs/intro/install/) >= 1.5
+3. Configure [AWS credentials](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-files.html)
 
-### Quick Start (Minimal Configuration)
-
-Deploy stdapi.ai with sensible defaults in under 15 minutes:
+### Minimal Deployment
 
 ```hcl
 module "stdapi_ai" {
-  source = "stdapi-ai/stdapi-ai/aws"
+  source  = "stdapi-ai/stdapi-ai/aws"
+  version = "~> 1.0"
 }
 ```
 
@@ -69,13 +29,19 @@ This creates a complete working deployment with:
 - CloudWatch logging and monitoring
 - KMS encryption for all data at rest
 
-### Production Example
+For production configurations with HTTPS, custom domain, WAF, and multi-region, see the **[deployment guide](https://stdapi.ai/operations_getting_started/)** and **[advanced deployment](https://stdapi.ai/operations_deploy_advanced/)**.
 
-For a complete production configuration with HTTPS, custom domain, WAF protection, and comprehensive monitoring, see:
+## Module Features
 
-📖 **[Production Deployment Guide →](https://stdapi.ai/operations_getting_started/#example-2-production-deployment-fully-featured)**
+Production-ready infrastructure following AWS Well-Architected Framework:
 
-Includes: ALB with HTTPS, Route53 DNS, ACM certificate, WAF with rate limiting, CloudWatch alarms, and multi-region S3 buckets.
+- **🚀 Serverless Compute** — ECS Fargate with intelligent auto-scaling (0.25-16 vCPU, CPU/Memory/Request-based)
+- **⚖️ Load Balancing** — Application Load Balancer with HTTPS/TLS, configurable idle timeout for long operations
+- **🌐 Networking** — VPC with public/private subnets, VPC endpoints for AWS services, IPv4/IPv6 support
+- **🔒 Security** — WAF with rate limiting & IP filtering, KMS encryption, IAM roles with least privilege
+- **📊 Monitoring** — CloudWatch dashboards, intelligent alarms, VPC Flow Logs, request/response logging
+- **💾 Storage** — S3 buckets with encryption, versioning, lifecycle policies, multi-region support
+- **💰 Cost Optimization** — Fargate Spot support (~70% discount), scheduled auto-scaling, resource right-sizing
 
 ## Architecture
 
@@ -116,28 +82,24 @@ Includes: ALB with HTTPS, Route53 DNS, ACM certificate, WAF with rate limiting, 
           └─────────────┘
 ```
 
-## Documentation & Resources
+## Documentation
 
-### 📚 Deployment & Operations
-- **[Getting Started Guide](https://stdapi.ai/operations_getting_started/)** - Complete deployment examples with code snippets
-- **[Configuration Reference](https://stdapi.ai/operations_configuration/)** - All environment variables and module parameters explained
-- **[Licensing Guide](https://stdapi.ai/operations_licensing/)** - AGPL vs Commercial licensing explained
-
-### 🔌 API & Integration
-- **[API Documentation](https://stdapi.ai/api_overview/)** - Complete OpenAI-compatible API reference
-- **[Use Cases & Integrations](https://stdapi.ai/use_cases/)** - Step-by-step guides for Open WebUI, n8n, Continue.dev, and more
-
-### 🗺️ Product
-- **[Feature Roadmap](https://stdapi.ai/roadmap/)** - Current features and upcoming releases
-- **[GitHub Repository](https://github.com/stdapi-ai/stdapi.ai)** - Source code and community discussions
+| Resource | Description |
+|---|---|
+| **[Getting Started](https://stdapi.ai/operations_getting_started/)** | Deployment examples and first API call |
+| **[Advanced Deployment](https://stdapi.ai/operations_deploy_advanced/)** | VPC integration, multi-region, cost optimization |
+| **[Configuration](https://stdapi.ai/operations_configuration/)** | All environment variables and module parameters |
+| **[API Reference](https://stdapi.ai/api_overview/)** | OpenAI & Anthropic compatible API documentation |
+| **[Use Cases](https://stdapi.ai/use_cases/)** | Open WebUI, n8n, coding assistants, and more |
+| **[Features](https://stdapi.ai/features/)** | Full product capabilities |
 
 ## Technical Requirements
 
-- **AWS Marketplace Subscription** - [Subscribe here](https://aws.amazon.com/marketplace/pp/prodview-su2dajk5zawpo) (required for deployment)
-- **Terraform/OpenTofu** - Version >= 1.5.0
-- **AWS Provider** - Version >= 5.0
-- **AWS Regions** - All regions with ECS Fargate support
-- **IAM Permissions** - Permissions to create VPC, ECS, ALB, S3, KMS, IAM, CloudWatch resources
+- **AWS Marketplace Subscription** — [Subscribe here](https://aws.amazon.com/marketplace/pp/prodview-su2dajk5zawpo) (14-day free trial included)
+- **Terraform/OpenTofu** — Version >= 1.5.0
+- **AWS Provider** — Version >= 5.0
+- **AWS Regions** — All regions with ECS Fargate support
+- **IAM Permissions** — Permissions to create VPC, ECS, ALB, S3, KMS, IAM, CloudWatch resources
 
 ---
 
