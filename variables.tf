@@ -206,7 +206,7 @@ variable "aws_bedrock_cross_region_inference_global" {
 }
 
 variable "aws_bedrock_legacy" {
-  description = "If true, allow legacy Bedrock models to be used. Default to true."
+  description = "If true, allow legacy Bedrock models to be used. Default to false."
   type        = bool
   default     = null
 }
@@ -523,7 +523,7 @@ variable "model_aliases" {
 variable "version_to_deploy" {
   description = "Container image version tag from AWS Marketplace. Leave unset to automatically use the latest stable version. Only override for testing or rollback purposes."
   type        = string
-  default     = "1.7.0"
+  default     = "1.8.0"
 }
 
 # KMS configuration

@@ -176,6 +176,13 @@ data "aws_iam_policy_document" "server" {
     resources = ["*"]
   }
 
+  # Bedrock - Async Invoke Tagging (Always Required)
+  statement {
+    sid       = "BedrockAsyncInvokeTagging"
+    actions   = ["bedrock:TagResource"]
+    resources = ["arn:aws:bedrock:*:${data.aws_caller_identity.current.account_id}:async-invoke/*"]
+  }
+
   # Bedrock - Inference Profiles & Prompt Routers (Optional)
   dynamic "statement" {
     for_each = var.aws_bedrock_allow_cross_region_inference_profile_arn != false || var.aws_bedrock_allow_application_inference_profile_arn != false || var.aws_bedrock_allow_prompt_router_arn != false || length(var.aws_bedrock_model_arn_mapping) > 0 ? [1] : []
@@ -340,6 +347,16 @@ data "aws_iam_policy_document" "server" {
         "transcribe:DeleteTranscriptionJob"
       ]
       resources = ["*"]
+    }
+  }
+
+  # Transcribe - Job Tagging (Only if S3 bucket available)
+  dynamic "statement" {
+    for_each = local.s3_bucket_name != null || var.aws_transcribe_s3_bucket != null ? [1] : []
+    content {
+      sid       = "TranscribeTagging"
+      actions   = ["transcribe:TagResource"]
+      resources = ["arn:aws:transcribe:*:${data.aws_caller_identity.current.account_id}:transcription-job/*"]
     }
   }
 
