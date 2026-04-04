@@ -790,6 +790,12 @@ variable "alb_waf_logging_enabled" {
   default     = true
 }
 
+variable "alb_ssl_policy" {
+  description = "SSL/TLS security policy for the ALB HTTPS listener. Defaults to the AWS-recommended post-quantum policy. See https://docs.aws.amazon.com/elasticloadbalancing/latest/application/describe-ssl-policies.html"
+  type        = string
+  default     = "ELBSecurityPolicy-TLS13-1-2-Res-PQ-2025-09"
+}
+
 # Logging and Monitoring
 
 variable "cloudwatch_logs_retention_in_days" {
