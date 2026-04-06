@@ -56,6 +56,7 @@ module "server" {
           AWS_TRANSCRIBE_REGION              = var.aws_transcribe_region
           AWS_TRANSCRIBE_S3_BUCKET           = var.aws_transcribe_s3_bucket
           AWS_S3_TMP_PREFIX                  = var.aws_s3_tmp_prefix
+          AWS_S3_FILES_PREFIX                = var.aws_s3_files_prefix
           AWS_TRANSLATE_REGION               = var.aws_translate_region
           TIMEZONE                           = var.timezone
           OPENAI_ROUTES_PREFIX               = var.openai_routes_prefix
@@ -238,11 +239,29 @@ data "aws_iam_policy_document" "server" {
       sid = "S3FileStorage"
       actions = [
         "s3:PutObject",
+        "s3:PutObjectTagging",
         "s3:GetObject",
-        "s3:DeleteObject"
+        "s3:DeleteObject",
+        "s3:CreateMultipartUpload",
+        "s3:UploadPart",
+        "s3:CompleteMultipartUpload",
+        "s3:AbortMultipartUpload",
+        "s3:ListMultipartUploadParts",
       ]
       resources = [
         var.aws_s3_bucket != null ? "arn:aws:s3:::${var.aws_s3_bucket}/*" : "${aws_s3_bucket.main[0].arn}/*"
+      ]
+    }
+  }
+
+  # S3 - File Storage List (Optional, required for Files API list and multipart upload endpoints)
+  dynamic "statement" {
+    for_each = local.s3_bucket_name != null ? [1] : []
+    content {
+      sid     = "S3FileStorageList"
+      actions = ["s3:ListBucket", "s3:ListBucketMultipartUploads"]
+      resources = [
+        var.aws_s3_bucket != null ? "arn:aws:s3:::${var.aws_s3_bucket}" : aws_s3_bucket.main[0].arn
       ]
     }
   }
@@ -266,11 +285,29 @@ data "aws_iam_policy_document" "server" {
       sid = "S3RegionalBuckets"
       actions = [
         "s3:PutObject",
+        "s3:PutObjectTagging",
         "s3:GetObject",
-        "s3:DeleteObject"
+        "s3:DeleteObject",
+        "s3:CreateMultipartUpload",
+        "s3:UploadPart",
+        "s3:CompleteMultipartUpload",
+        "s3:AbortMultipartUpload",
+        "s3:ListMultipartUploadParts",
       ]
       resources = [
         for bucket in values(var.aws_s3_regional_buckets) : "arn:aws:s3:::${bucket}/*"
+      ]
+    }
+  }
+
+  # S3 - Regional Buckets List (Optional)
+  dynamic "statement" {
+    for_each = var.aws_s3_regional_buckets != null ? [1] : []
+    content {
+      sid     = "S3RegionalBucketsList"
+      actions = ["s3:ListBucket", "s3:ListBucketMultipartUploads"]
+      resources = [
+        for bucket in values(var.aws_s3_regional_buckets) : "arn:aws:s3:::${bucket}"
       ]
     }
   }

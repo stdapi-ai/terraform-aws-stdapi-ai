@@ -275,6 +275,12 @@ variable "aws_s3_tmp_prefix" {
   default     = null
 }
 
+variable "aws_s3_files_prefix" {
+  description = "S3 prefix (folder path) for Files API objects. Default to 'files/'."
+  type        = string
+  default     = null
+}
+
 variable "aws_translate_region" {
   description = "AWS region for Translate text translation service. Default to first var.aws_bedrock_regions region or the current region."
   type        = string

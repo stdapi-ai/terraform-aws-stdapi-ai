@@ -12,6 +12,9 @@ locals {
 
   # S3 temporary prefix
   s3_tmp_prefix = var.aws_s3_tmp_prefix != null ? var.aws_s3_tmp_prefix : "tmp/"
+
+  # S3 Files API prefix
+  s3_files_prefix = var.aws_s3_files_prefix != null ? var.aws_s3_files_prefix : "files/"
 }
 
 # Data source for user-provided bucket ARN
@@ -69,6 +72,26 @@ resource "aws_s3_bucket_lifecycle_configuration" "main" {
     }
   }
 
+  # Expire Files API objects that were uploaded with expires_after (tagged expires=true).
+  rule {
+    id     = "stdapi-files-expiration"
+    status = "Enabled"
+    filter {
+      and {
+        prefix = local.s3_files_prefix
+        tags = {
+          expires = "true"
+        }
+      }
+    }
+    expiration {
+      days = 30
+    }
+    noncurrent_version_expiration {
+      noncurrent_days = 1
+    }
+  }
+
   # Transition to Intelligent-Tiering for cost optimization
   rule {
     id     = "intelligent-tiering"
@@ -80,6 +103,9 @@ resource "aws_s3_bucket_lifecycle_configuration" "main" {
     }
     noncurrent_version_expiration {
       noncurrent_days = 30
+    }
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 1
     }
   }
 }
