@@ -529,7 +529,7 @@ variable "model_aliases" {
 variable "version_to_deploy" {
   description = "Container image version tag from AWS Marketplace. Leave unset to automatically use the latest stable version. Only override for testing or rollback purposes."
   type        = string
-  default     = "1.8.0"
+  default     = "1.9.0"
 }
 
 # KMS configuration
