@@ -73,6 +73,7 @@ module "server" {
           TOKENS_ESTIMATION_DEFAULT_ENCODING = var.tokens_estimation_default_encoding
           ANTHROPIC_BETA_ALLOWLIST           = var.anthropic_beta_allowlist
           AWS_BEDROCK_REGION_ROUTING         = var.aws_bedrock_region_routing
+          IMAGE_GENERATION_MODEL             = var.image_generation_model
         } : k => v if v != null },
         { for k, v in {
           AWS_S3_ACCELERATE                                      = var.aws_s3_accelerate

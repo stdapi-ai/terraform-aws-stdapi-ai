@@ -526,10 +526,16 @@ variable "model_aliases" {
   default     = null
 }
 
+variable "image_generation_model" {
+  description = "Default model ID for image generation (e.g. 'amazon.nova-canvas-v1:0'). Required unless the client or the LLM specifies a model per call."
+  type        = string
+  default     = null
+}
+
 variable "version_to_deploy" {
   description = "Container image version tag from AWS Marketplace. Leave unset to automatically use the latest stable version. Only override for testing or rollback purposes."
   type        = string
-  default     = "1.9.0"
+  default     = "1.10.0"
 }
 
 # KMS configuration
