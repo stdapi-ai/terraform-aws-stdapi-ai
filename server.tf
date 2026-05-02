@@ -72,10 +72,14 @@ module "server" {
           DEFAULT_TTS_LANGUAGE               = var.default_tts_language
           TOKENS_ESTIMATION_DEFAULT_ENCODING = var.tokens_estimation_default_encoding
           ANTHROPIC_BETA_ALLOWLIST           = var.anthropic_beta_allowlist
+          MCP_INCLUDE_TOOLS                  = var.mcp_include_tools
+          MCP_EXCLUDE_TOOLS                  = var.mcp_exclude_tools
           AWS_BEDROCK_REGION_ROUTING         = var.aws_bedrock_region_routing
           IMAGE_GENERATION_MODEL             = var.image_generation_model
         } : k => v if v != null },
         { for k, v in {
+          ENABLE_MCP_STREAMABLE_HTTP                             = var.enable_mcp_streamable_http
+          ENABLE_MCP_SSE                                         = var.enable_mcp_sse
           AWS_S3_ACCELERATE                                      = var.aws_s3_accelerate
           AWS_BEDROCK_CROSS_REGION_INFERENCE                     = var.aws_bedrock_cross_region_inference
           AWS_BEDROCK_CROSS_REGION_INFERENCE_GLOBAL              = var.aws_bedrock_cross_region_inference_global
@@ -108,6 +112,7 @@ module "server" {
           AWS_BEDROCK_REGION_ROUTING_MAX_QUOTA_BACKOFF_SECONDS   = var.aws_bedrock_region_routing_max_quota_backoff_seconds
           AWS_BEDROCK_REGION_ROUTING_QUOTA_STALE_FACTOR          = var.aws_bedrock_region_routing_quota_stale_factor
           AWS_BEDROCK_MAX_RETRIES                                = var.aws_bedrock_max_retries
+          AI_RESPONSE_TIMEOUT                                    = var.ai_response_timeout
           AWS_BEDROCK_DEPRECATED_MODEL_FALLBACK                  = var.aws_bedrock_deprecated_model_fallback
         } : k => tostring(v) if v != null },
         { for k, v in {

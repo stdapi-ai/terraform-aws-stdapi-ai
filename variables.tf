@@ -474,6 +474,30 @@ variable "enable_openapi_json" {
   default     = null
 }
 
+variable "enable_mcp_streamable_http" {
+  description = "Enable the MCP (Model Context Protocol) server using Streamable HTTP transport. When enabled, exposes an MCP-compatible endpoint at /mcp. This is the recommended MCP transport. Default to false."
+  type        = bool
+  default     = null
+}
+
+variable "enable_mcp_sse" {
+  description = "Enable the MCP (Model Context Protocol) server using Server-Sent Events (SSE) transport. When enabled, exposes MCP endpoints at /sse. Maintained for backwards compatibility with older MCP clients; prefer enable_mcp_streamable_http for new deployments. Default to false."
+  type        = bool
+  default     = null
+}
+
+variable "mcp_include_tools" {
+  description = "Comma-separated list of MCP tool names to expose exclusively. Only the listed tools will be available to MCP clients; all others are hidden. When both mcp_include_tools and mcp_exclude_tools are specified, mcp_exclude_tools values are removed from mcp_include_tools. Example: 'openai_chat_completion,openai_embedding,openai_model_list'"
+  type        = string
+  default     = null
+}
+
+variable "mcp_exclude_tools" {
+  description = "Comma-separated list of MCP tool names to hide from MCP clients. All other tools remain exposed. When mcp_include_tools is also specified, these values are removed from it. Example: 'openai_files_delete,anthropic_files_delete'"
+  type        = string
+  default     = null
+}
+
 variable "cors_allow_origins" {
   description = "List of origins allowed to make cross-origin requests (CORS). Use ['*'] to allow all origins. Default to no CORS headers."
   type        = list(string)
@@ -501,6 +525,12 @@ variable "enable_gzip" {
 variable "ssrf_protection_block_private_networks" {
   description = "Enable SSRF protection by blocking requests to private/local networks. When enabled, the server will reject requests to RFC 1918 private addresses (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16), loopback, link-local, reserved, and multicast addresses. Default to true."
   type        = bool
+  default     = null
+}
+
+variable "ai_response_timeout" {
+  description = "Maximum time in seconds to wait for an AI model to complete a response. Applies to both streaming and non-streaming requests. The default of 600 seconds accommodates models with extended reasoning. Increase for long-running requests (e.g., large document analysis); decrease to fail fast on unexpectedly slow responses. Default to 600."
+  type        = number
   default     = null
 }
 
@@ -535,7 +565,7 @@ variable "image_generation_model" {
 variable "version_to_deploy" {
   description = "Container image version tag from AWS Marketplace. Leave unset to automatically use the latest stable version. Only override for testing or rollback purposes."
   type        = string
-  default     = "1.10.0"
+  default     = "1.11.0"
 }
 
 # KMS configuration
