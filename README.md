@@ -21,15 +21,44 @@ module "stdapi_ai" {
 }
 ```
 
-This creates a complete working deployment with:
-- ECS Fargate service with auto-scaling
-- Dedicated VPC with public/private subnets
-- VPC endpoints for AWS services
-- S3 bucket for temporary files
-- CloudWatch logging and monitoring
-- KMS encryption for all data at rest
+**What this minimal configuration deploys:**
 
-For production configurations with HTTPS, custom domain, WAF, and multi-region, see the **[deployment guide](https://stdapi.ai/operations_getting_started/)** and **[advanced deployment](https://stdapi.ai/operations_deploy_advanced/)**.
+- ECS Fargate service (auto-scaling, private subnets)
+- Dedicated VPC with public/private subnets and VPC endpoints for AWS services
+- S3 bucket for temporary files (KMS-encrypted)
+- IAM roles (least privilege) and CloudWatch logs
+
+**What it does NOT deploy** (you add these explicitly for production):
+
+- ❌ No public endpoint — the service is only reachable from inside the VPC until you enable the ALB
+- ❌ No HTTPS / custom domain
+- ❌ No WAF
+- ❌ No API key authentication
+
+**Production-ready next step — add a public HTTPS endpoint with WAF and API key:**
+
+```hcl
+module "stdapi_ai" {
+  source  = "stdapi-ai/stdapi-ai/aws"
+  version = "~> 1.0"
+
+  # Public HTTPS endpoint on a custom domain (ACM cert auto-issued via Route53)
+  alb_enabled           = true
+  alb_public            = true
+  alb_domain_name       = "api.example.com"
+  alb_route53_zone_name = "example.com"
+
+  # Protection
+  alb_waf_enabled             = true
+  alb_waf_rate_limit          = 2000
+  alb_waf_block_anonymous_ips = true
+
+  # Authentication — module generates a secure key and exposes it as a sensitive output
+  api_key_create = true
+}
+```
+
+For ready-to-deploy variants (single-region, EU/US multi-region, Open WebUI), see the [**samples repository**](https://github.com/stdapi-ai/samples). For deeper patterns (BYO VPC / ALB / Route53 / S3, manual ECS, cost-optimized), see the [**advanced deployment guide**](https://stdapi.ai/operations_deploy_advanced/).
 
 ## Module Features
 
@@ -81,6 +110,19 @@ Production-ready infrastructure following AWS Well-Architected Framework:
           │  CloudWatch │
           └─────────────┘
 ```
+
+## Examples & Integration
+
+Ready-to-deploy Terraform examples live in the [**stdapi.ai samples repository**](https://github.com/stdapi-ai/samples):
+
+| Example | What it deploys |
+|---|---|
+| [getting_started_production](https://github.com/stdapi-ai/samples/tree/main/getting_started_production) | Single-region production deployment with HTTPS, WAF, auto-scaling |
+| [getting_started_production_gdpr](https://github.com/stdapi-ai/samples/tree/main/getting_started_production_gdpr) | Multi-region EU deployment (4 regions) for GDPR data residency |
+| [getting_started_production_us](https://github.com/stdapi-ai/samples/tree/main/getting_started_production_us) | Multi-region US deployment (3 regions) for high availability |
+| [getting_started_openwebui](https://github.com/stdapi-ai/samples/tree/main/getting_started_openwebui) | Full Open WebUI chat platform stack (Aurora + Valkey + SearXNG + stdapi.ai) |
+
+For integration patterns against existing infrastructure (BYO VPC, ALB, Route53 zone, or S3 bucket) and non-Terraform deployments (manual ECS, EKS), see the [**advanced deployment guide**](https://stdapi.ai/operations_deploy_advanced/).
 
 ## Documentation
 
