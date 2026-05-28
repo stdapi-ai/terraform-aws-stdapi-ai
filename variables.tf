@@ -40,21 +40,35 @@ variable "aws_s3_bucket" {
 
 variable "aws_s3_regional_buckets" {
   description = <<-EOT
-    Region-specific S3 buckets for temporary file storage during Bedrock operations.
+    By default (`aws_s3_regional_buckets_create = true`), buckets are created automatically for every region in `aws_bedrock_regions` not listed here. Use this variable only to point to **existing** buckets you manage yourself.
+
     Keys are AWS region identifiers, values are bucket names.
 
     Example: { "us-east-1" = "my-bucket-us-east-1", "us-west-2" = "my-bucket-us-west-2" }
 
     Required for Bedrock operations with multimodal input or document processing.
-    Use the companion module 'stdapi-ai/stdapi-ai-s3-regional-bucket' to create these buckets automatically.
-    See: https://github.com/stdapi-ai/terraform-aws-stdapi-ai-s3-regional-bucket
   EOT
   type        = map(string)
   default     = null
 }
 
+variable "aws_s3_regional_buckets_create" {
+  description = <<-EOT
+    If true (default), create regional S3 buckets and per-region KMS keys for every region in `aws_bedrock_regions`
+    not already present as a key of `aws_s3_regional_buckets` and not equal to the provider's primary region.
+
+    Set to false to disable automatic creation (for example, if you manage these buckets out-of-band).
+  EOT
+  type        = bool
+  default     = true
+}
+
 variable "aws_s3_buckets_kms_keys_arns" {
-  description = "List of KMS key ARNs used to encrypt the regional S3 buckets. Required to grant the server permissions to access encrypted regional buckets."
+  description = <<-EOT
+    List of KMS key ARNs used to encrypt user-provided regional S3 buckets specified in `aws_s3_regional_buckets`.
+    Required to grant the server permissions to access encrypted regional buckets.
+    When using `aws_s3_regional_buckets_create = true` (default), KMS keys are created automatically and do not need to be specified here.
+  EOT
   type        = list(string)
   default     = []
 }

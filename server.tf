@@ -116,7 +116,7 @@ module "server" {
           AWS_BEDROCK_DEPRECATED_MODEL_FALLBACK                  = var.aws_bedrock_deprecated_model_fallback
         } : k => tostring(v) if v != null },
         { for k, v in {
-          AWS_S3_REGIONAL_BUCKETS           = var.aws_s3_regional_buckets
+          AWS_S3_REGIONAL_BUCKETS           = local.regional_buckets_combined
           AWS_BEDROCK_MODEL_ARN_MAPPING     = var.aws_bedrock_model_arn_mapping
           CORS_ALLOW_ORIGINS                = var.cors_allow_origins
           TRUSTED_HOSTS                     = var.trusted_hosts
@@ -286,7 +286,7 @@ data "aws_iam_policy_document" "server" {
 
   # S3 - Regional Buckets for Bedrock (Optional)
   dynamic "statement" {
-    for_each = var.aws_s3_regional_buckets != null ? [1] : []
+    for_each = length(local.regional_buckets_combined) > 0 ? [1] : []
     content {
       sid = "S3RegionalBuckets"
       actions = [
@@ -301,19 +301,19 @@ data "aws_iam_policy_document" "server" {
         "s3:ListMultipartUploadParts",
       ]
       resources = [
-        for bucket in values(var.aws_s3_regional_buckets) : "arn:aws:s3:::${bucket}/*"
+        for bucket in values(local.regional_buckets_combined) : "arn:aws:s3:::${bucket}/*"
       ]
     }
   }
 
   # S3 - Regional Buckets List (Optional)
   dynamic "statement" {
-    for_each = var.aws_s3_regional_buckets != null ? [1] : []
+    for_each = length(local.regional_buckets_combined) > 0 ? [1] : []
     content {
       sid     = "S3RegionalBucketsList"
       actions = ["s3:ListBucket", "s3:ListBucketMultipartUploads"]
       resources = [
-        for bucket in values(var.aws_s3_regional_buckets) : "arn:aws:s3:::${bucket}"
+        for bucket in values(local.regional_buckets_combined) : "arn:aws:s3:::${bucket}"
       ]
     }
   }
@@ -331,21 +331,21 @@ data "aws_iam_policy_document" "server" {
       condition {
         test     = "StringEquals"
         variable = "kms:ViaService"
-        values   = ["s3.${data.aws_region.current.name}.amazonaws.com"]
+        values   = ["s3.${data.aws_region.current.region}.amazonaws.com"]
       }
     }
   }
 
   # KMS - Regional S3 Buckets Encryption (Optional)
   dynamic "statement" {
-    for_each = length(var.aws_s3_buckets_kms_keys_arns) > 0 ? [1] : []
+    for_each = length(local.regional_buckets_kms_arns_combined) > 0 ? [1] : []
     content {
       sid = "KMSRegionalBuckets"
       actions = [
         "kms:Decrypt",
         "kms:GenerateDataKey"
       ]
-      resources = var.aws_s3_buckets_kms_keys_arns
+      resources = local.regional_buckets_kms_arns_combined
       condition {
         test     = "StringLike"
         variable = "kms:ViaService"

@@ -8,7 +8,7 @@ data "aws_caller_identity" "current" {}
 
 locals {
   name_prefix = "${var.name_prefix}-${random_id.main.hex}"
-  name        = "${local.name_prefix}-${data.aws_region.current.name}"
+  name        = "${local.name_prefix}-${data.aws_region.current.region}"
   name_log    = "${local.name}-logs"
   ecs_service = true
   port        = 8000
@@ -37,7 +37,7 @@ data "aws_iam_policy_document" "log_kms_policy" {
     sid = "Allow ${local.name} applications logs"
     principals {
       type        = "Service"
-      identifiers = ["logs.${data.aws_region.current.name}.amazonaws.com"]
+      identifiers = ["logs.${data.aws_region.current.region}.amazonaws.com"]
     }
     actions = [
       "kms:Encrypt",
@@ -51,10 +51,10 @@ data "aws_iam_policy_document" "log_kms_policy" {
       test     = "ArnLike"
       variable = "kms:EncryptionContext:aws:logs:arn"
       values = [
-        "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:log-group:${local.name}*",
-        "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:log-group:/aws/elasticloadbalancing/${local.name}*",
-        "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:log-group:/aws/wafv2/${local.name}*",
-        "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:log-group:aws-waf-logs-${local.name}*"
+        "arn:aws:logs:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:log-group:${local.name}*",
+        "arn:aws:logs:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/elasticloadbalancing/${local.name}*",
+        "arn:aws:logs:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/wafv2/${local.name}*",
+        "arn:aws:logs:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:log-group:aws-waf-logs-${local.name}*"
       ]
     }
   }

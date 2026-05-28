@@ -7,7 +7,7 @@ locals {
   bedrock_regions = var.aws_bedrock_regions != null ? var.aws_bedrock_regions : []
 
   # Default region for all services is the first Bedrock region, or current region if Bedrock regions not specified
-  default_service_region = length(local.bedrock_regions) > 0 ? local.bedrock_regions[0] : data.aws_region.current.name
+  default_service_region = length(local.bedrock_regions) > 0 ? local.bedrock_regions[0] : data.aws_region.current.region
 
   # Determine the actual region each service will use
   polly_region      = var.aws_polly_region != null ? var.aws_polly_region : local.default_service_region
@@ -16,11 +16,11 @@ locals {
   translate_region  = var.aws_translate_region != null ? var.aws_translate_region : local.default_service_region
 
   # Check if each service is configured for the current region
-  polly_in_current_region      = local.polly_region == data.aws_region.current.name
-  comprehend_in_current_region = local.comprehend_region == data.aws_region.current.name
-  transcribe_in_current_region = local.transcribe_region == data.aws_region.current.name
-  translate_in_current_region  = local.translate_region == data.aws_region.current.name
-  bedrock_in_current_region    = length(local.bedrock_regions) == 0 || contains(local.bedrock_regions, data.aws_region.current.name)
+  polly_in_current_region      = local.polly_region == data.aws_region.current.region
+  comprehend_in_current_region = local.comprehend_region == data.aws_region.current.region
+  transcribe_in_current_region = local.transcribe_region == data.aws_region.current.region
+  translate_in_current_region  = local.translate_region == data.aws_region.current.region
+  bedrock_in_current_region    = length(local.bedrock_regions) == 0 || contains(local.bedrock_regions, data.aws_region.current.region)
 
   # Check if Secrets Manager is needed for API key authentication
   secretsmanager_needed = var.api_key_secretsmanager_secret != null

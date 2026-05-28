@@ -139,7 +139,7 @@ For integration patterns against existing infrastructure (BYO VPC, ALB, Route53 
 
 - **AWS Marketplace Subscription** — [Subscribe here](https://aws.amazon.com/marketplace/pp/prodview-su2dajk5zawpo) (14-day free trial included)
 - **Terraform/OpenTofu** — Version >= 1.5.0
-- **AWS Provider** — Version >= 5.0
+- **AWS Provider** — Version >= 6.0.0
 - **AWS Regions** — All regions with ECS Fargate support
 - **IAM Permissions** — Permissions to create VPC, ECS, ALB, S3, KMS, IAM, CloudWatch resources
 
@@ -152,14 +152,14 @@ For integration patterns against existing infrastructure (BYO VPC, ALB, Route53 
 
 | Name | Version |
 |------|---------|
-| <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >=1 |
-| <a name="requirement_aws"></a> [aws](#requirement\_aws) | >=5 |
+| <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 1.5.0 |
+| <a name="requirement_aws"></a> [aws](#requirement\_aws) | >= 6.0.0 |
 
 ## Providers
 
 | Name | Version |
 |------|---------|
-| <a name="provider_aws"></a> [aws](#provider\_aws) | >=5 |
+| <a name="provider_aws"></a> [aws](#provider\_aws) | >= 6.0.0 |
 | <a name="provider_random"></a> [random](#provider\_random) | n/a |
 
 ## Modules
@@ -167,6 +167,7 @@ For integration patterns against existing infrastructure (BYO VPC, ALB, Route53 
 | Name | Source | Version |
 |------|--------|---------|
 | <a name="module_kms_key"></a> [kms\_key](#module\_kms\_key) | JGoutin/kms-key/aws | ~> 1.0 |
+| <a name="module_regional_kms"></a> [regional\_kms](#module\_regional\_kms) | JGoutin/kms-key/aws | ~> 1.1 |
 | <a name="module_server"></a> [server](#module\_server) | JGoutin/ecs-fargate/aws | ~> 1.2 |
 | <a name="module_vpc"></a> [vpc](#module\_vpc) | JGoutin/vpc/aws | ~> 1.0 |
 
@@ -190,11 +191,17 @@ For integration patterns against existing infrastructure (BYO VPC, ALB, Route53 
 | [aws_route53_record.main](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/route53_record) | resource |
 | [aws_route53_record.main_ipv6](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/route53_record) | resource |
 | [aws_s3_bucket.main](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket) | resource |
+| [aws_s3_bucket.regional](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket) | resource |
 | [aws_s3_bucket_lifecycle_configuration.main](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_lifecycle_configuration) | resource |
+| [aws_s3_bucket_lifecycle_configuration.regional](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_lifecycle_configuration) | resource |
 | [aws_s3_bucket_policy.main](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_policy) | resource |
+| [aws_s3_bucket_policy.regional](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_policy) | resource |
 | [aws_s3_bucket_public_access_block.main](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_public_access_block) | resource |
+| [aws_s3_bucket_public_access_block.regional](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_public_access_block) | resource |
 | [aws_s3_bucket_server_side_encryption_configuration.main](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_server_side_encryption_configuration) | resource |
+| [aws_s3_bucket_server_side_encryption_configuration.regional](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_server_side_encryption_configuration) | resource |
 | [aws_s3_bucket_versioning.main](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_versioning) | resource |
+| [aws_s3_bucket_versioning.regional](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_versioning) | resource |
 | [aws_security_group.alb](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/security_group) | resource |
 | [aws_vpc_security_group_egress_rule.alb_to_ecs](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/vpc_security_group_egress_rule) | resource |
 | [aws_vpc_security_group_ingress_rule.alb_http_ipv4](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/vpc_security_group_ingress_rule) | resource |
@@ -210,6 +217,7 @@ For integration patterns against existing infrastructure (BYO VPC, ALB, Route53 
 | [aws_caller_identity.current](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/caller_identity) | data source |
 | [aws_iam_policy_document.log_kms_policy](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
 | [aws_iam_policy_document.main_bucket_policy](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
+| [aws_iam_policy_document.regional_bucket_policy](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
 | [aws_iam_policy_document.server](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
 | [aws_region.current](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/region) | data source |
 | [aws_route53_zone.by_name](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/route53_zone) | data source |
@@ -289,9 +297,10 @@ For integration patterns against existing infrastructure (BYO VPC, ALB, Route53 
 | <a name="input_aws_s3_accepted_buckets_kms_key_arn"></a> [aws\_s3\_accepted\_buckets\_kms\_key\_arn](#input\_aws\_s3\_accepted\_buckets\_kms\_key\_arn) | List of KMS key ARNs used to encrypt the accepted S3 buckets (var.aws\_s3\_accepted\_buckets). Required to grant the server permissions to decrypt objects from KMS-encrypted accepted buckets. | `list(string)` | `null` | no |
 | <a name="input_aws_s3_bucket"></a> [aws\_s3\_bucket](#input\_aws\_s3\_bucket) | Existing S3 bucket name for storing generated files and application data. When specified, takes precedence over aws\_s3\_bucket\_create. If not specified and aws\_s3\_bucket\_create is true, a bucket will be created automatically. | `string` | `null` | no |
 | <a name="input_aws_s3_bucket_create"></a> [aws\_s3\_bucket\_create](#input\_aws\_s3\_bucket\_create) | If true, create an S3 bucket for the application. Only used when aws\_s3\_bucket is not specified. When aws\_s3\_bucket is specified, this value is ignored. | `bool` | `true` | no |
-| <a name="input_aws_s3_buckets_kms_keys_arns"></a> [aws\_s3\_buckets\_kms\_keys\_arns](#input\_aws\_s3\_buckets\_kms\_keys\_arns) | List of KMS key ARNs used to encrypt the regional S3 buckets. Required to grant the server permissions to access encrypted regional buckets. | `list(string)` | `[]` | no |
+| <a name="input_aws_s3_buckets_kms_keys_arns"></a> [aws\_s3\_buckets\_kms\_keys\_arns](#input\_aws\_s3\_buckets\_kms\_keys\_arns) | List of KMS key ARNs used to encrypt user-provided regional S3 buckets specified in `aws_s3_regional_buckets`.<br/>Required to grant the server permissions to access encrypted regional buckets.<br/>When using `aws_s3_regional_buckets_create = true` (default), KMS keys are created automatically and do not need to be specified here. | `list(string)` | `[]` | no |
 | <a name="input_aws_s3_files_prefix"></a> [aws\_s3\_files\_prefix](#input\_aws\_s3\_files\_prefix) | S3 prefix (folder path) for Files API objects. Default to 'files/'. | `string` | `null` | no |
-| <a name="input_aws_s3_regional_buckets"></a> [aws\_s3\_regional\_buckets](#input\_aws\_s3\_regional\_buckets) | Region-specific S3 buckets for temporary file storage during Bedrock operations.<br/>Keys are AWS region identifiers, values are bucket names.<br/><br/>Example: { "us-east-1" = "my-bucket-us-east-1", "us-west-2" = "my-bucket-us-west-2" }<br/><br/>Required for Bedrock operations with multimodal input or document processing.<br/>Use the companion module 'stdapi-ai/stdapi-ai-s3-regional-bucket' to create these buckets automatically.<br/>See: https://github.com/stdapi-ai/terraform-aws-stdapi-ai-s3-regional-bucket | `map(string)` | `null` | no |
+| <a name="input_aws_s3_regional_buckets"></a> [aws\_s3\_regional\_buckets](#input\_aws\_s3\_regional\_buckets) | By default (`aws_s3_regional_buckets_create = true`), buckets are created automatically for every region in `aws_bedrock_regions` not listed here. Use this variable only to point to **existing** buckets you manage yourself.<br/><br/>Keys are AWS region identifiers, values are bucket names.<br/><br/>Example: { "us-east-1" = "my-bucket-us-east-1", "us-west-2" = "my-bucket-us-west-2" }<br/><br/>Required for Bedrock operations with multimodal input or document processing. | `map(string)` | `null` | no |
+| <a name="input_aws_s3_regional_buckets_create"></a> [aws\_s3\_regional\_buckets\_create](#input\_aws\_s3\_regional\_buckets\_create) | If true (default), create regional S3 buckets and per-region KMS keys for every region in `aws_bedrock_regions`<br/>not already present as a key of `aws_s3_regional_buckets` and not equal to the provider's primary region.<br/><br/>Set to false to disable automatic creation (for example, if you manage these buckets out-of-band). | `bool` | `true` | no |
 | <a name="input_aws_s3_tmp_prefix"></a> [aws\_s3\_tmp\_prefix](#input\_aws\_s3\_tmp\_prefix) | S3 prefix (folder path) for temporary files used during job processing. Default to 'tmp/'. | `string` | `null` | no |
 | <a name="input_aws_transcribe_region"></a> [aws\_transcribe\_region](#input\_aws\_transcribe\_region) | AWS region for Transcribe speech-to-text service. Default to first var.aws\_bedrock\_regions region or the current region. | `string` | `null` | no |
 | <a name="input_aws_transcribe_s3_bucket"></a> [aws\_transcribe\_s3\_bucket](#input\_aws\_transcribe\_s3\_bucket) | AWS S3 bucket name for temporary file storage during transcription. Defaults to aws\_s3\_bucket if not specified. | `string` | `null` | no |
@@ -370,6 +379,7 @@ For integration patterns against existing infrastructure (BYO VPC, ALB, Route53 
 | <a name="output_kms_policy_documents_json"></a> [kms\_policy\_documents\_json](#output\_kms\_policy\_documents\_json) | KMS policy documents to add to the policy of the key specified via var.kms\_key\_id. |
 | <a name="output_name_prefix"></a> [name\_prefix](#output\_name\_prefix) | Name prefix for resources. To pass to compagnon module. |
 | <a name="output_port"></a> [port](#output\_port) | Container port exposed by the application. |
+| <a name="output_regional_buckets"></a> [regional\_buckets](#output\_regional\_buckets) | Map of region → bucket name (user-provided + auto-created). |
 | <a name="output_security_group_id"></a> [security\_group\_id](#output\_security\_group\_id) | Security group ID for the ECS server service. |
 | <a name="output_service_discovery_service_name"></a> [service\_discovery\_service\_name](#output\_service\_discovery\_service\_name) | Service discovery service name for the server (only if service discovery is enabled). |
 | <a name="output_service_name"></a> [service\_name](#output\_service\_name) | ECS service name. |

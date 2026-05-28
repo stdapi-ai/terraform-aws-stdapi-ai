@@ -46,6 +46,11 @@ output "deletion_protection" {
   value       = var.deletion_protection
 }
 
+output "regional_buckets" {
+  description = "Map of region → bucket name (user-provided + auto-created)."
+  value       = local.regional_buckets_combined
+}
+
 # Other outputs that may be required by the user
 
 output "api_key" {
