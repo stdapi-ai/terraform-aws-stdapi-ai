@@ -68,6 +68,7 @@ module "server" {
           OTEL_EXPORTER_ENDPOINT             = var.otel_exporter_endpoint
           LOG_LEVEL                          = var.log_level
           DEFAULT_MODEL_PARAMS               = var.default_model_params
+          DEFAULT_MODEL_SERVICE_TIERS        = var.default_model_service_tiers
           DEFAULT_TTS_MODEL                  = var.default_tts_model
           DEFAULT_TTS_LANGUAGE               = var.default_tts_language
           TOKENS_ESTIMATION_DEFAULT_ENCODING = var.tokens_estimation_default_encoding

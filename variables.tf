@@ -436,6 +436,12 @@ variable "default_model_params" {
   default     = null
 }
 
+variable "default_model_service_tiers" {
+  description = "Default service tier applied to specific models automatically when no explicit tier is provided (default, flex, priority, reserved). JSON string format, e.g. {\"amazon.nova-pro-v1:0\": \"flex\"}."
+  type        = string
+  default     = null
+}
+
 variable "default_tts_model" {
   description = "Default text-to-speech model to use if not specified in the request. Default to 'amazon.polly-standard'."
   type        = string
@@ -579,7 +585,7 @@ variable "image_generation_model" {
 variable "version_to_deploy" {
   description = "Container image version tag from AWS Marketplace. Leave unset to automatically use the latest stable version. Only override for testing or rollback purposes."
   type        = string
-  default     = "1.11.4"
+  default     = "1.12.0"
 }
 
 # KMS configuration
