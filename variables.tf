@@ -861,7 +861,7 @@ variable "cloudwatch_logs_retention_in_days" {
 }
 
 variable "container_insight" {
-  description = "Container insight configuration. Valid values: 'enhanced', 'enabled', 'disabled'. Default to 'enhanced'."
+  description = "Container insight configuration. Valid values: 'enhanced', 'enabled', 'disabled'. Default to 'enabled'."
   type        = string
   default     = "enabled"
   validation {

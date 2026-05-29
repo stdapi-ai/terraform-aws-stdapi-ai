@@ -24,8 +24,8 @@ module "stdapi_ai" {
 **What this minimal configuration deploys:**
 
 - ECS Fargate service (auto-scaling, private subnets)
-- Dedicated VPC with public/private subnets and VPC endpoints for AWS services
-- S3 bucket for temporary files (KMS-encrypted)
+- Dedicated VPC with private app subnets, NAT gateways for outbound AWS access, and the free S3 gateway endpoint
+- S3 bucket for generated and temporary files (KMS-encrypted)
 - IAM roles (least privilege) and CloudWatch logs
 
 **What it does NOT deploy** (you add these explicitly for production):
@@ -66,50 +66,61 @@ Production-ready infrastructure following AWS Well-Architected Framework:
 
 - **🚀 Serverless Compute** — ECS Fargate with intelligent auto-scaling (0.25-16 vCPU, CPU/Memory/Request-based)
 - **⚖️ Load Balancing** — Application Load Balancer with HTTPS/TLS, configurable idle timeout for long operations
-- **🌐 Networking** — VPC with public/private subnets, VPC endpoints for AWS services, IPv4/IPv6 support
+- **🌐 Networking** — Dedicated VPC with private app subnets; AWS access via NAT gateways or interface VPC endpoints; optional public subnets for the ALB; IPv4/IPv6 support
 - **🔒 Security** — WAF with rate limiting & IP filtering, KMS encryption, IAM roles with least privilege
-- **📊 Monitoring** — CloudWatch dashboards, intelligent alarms, VPC Flow Logs, request/response logging
+- **📊 Monitoring** — Container Insights dashboards, optional CloudWatch alarms, VPC Flow Logs, request/response logging
 - **💾 Storage** — S3 buckets with encryption, versioning, lifecycle policies, multi-region support
 - **💰 Cost Optimization** — Fargate Spot support (~70% discount), scheduled auto-scaling, resource right-sizing
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                         Internet                             │
-└────────────────┬─────────────────────────────────────────────┘
-                 │
-          ┌──────▼──────┐
-          │     WAF     │ (Optional)
-          └──────┬──────┘
-                 │
-          ┌──────▼──────┐
-          │     ALB     │ HTTPS/HTTP
-          │  (Public)   │
-          └──────┬──────┘
-                 │
-    ┌────────────┼────────────┐
-    │         VPC              │
-    │  ┌────────▼────────┐    │
-    │  │  ECS Fargate    │    │
-    │  │  ┌──────────┐   │    │
-    │  │  │stdapi.ai │   │    │───┐
-    │  │  │Container │   │    │   │ KMS Encrypted
-    │  │  └──────────┘   │    │   │
-    │  │   (Private)     │    │   ▼
-    │  └─────────────────┘    │  ┌─────────────┐
-    │                         │  │ S3 Bucket   │
-    │  ┌─────────────────┐    │  └─────────────┘
-    │  │ VPC Endpoints   │    │
-    │  │ (Bedrock, S3,   │◄───┤
-    │  │  Secrets, Logs) │    │
-    │  └─────────────────┘    │
-    └──────────────────────────┘
-                 │
-          ┌──────▼──────┐
-          │  CloudWatch │
-          └─────────────┘
+                        Internet
+                           │  egress only when required (see table)
+                ┌──────────▼──────────┐
+                │   WAF    (optional)  │   alb_waf_enabled
+                └──────────┬──────────┘
+                           │  inbound only when the ALB is enabled
+                ┌──────────▼──────────┐
+                │   ALB    (optional)  │   alb_enabled / alb_public
+                │   HTTPS / HTTP       │   (public subnets only if alb_public)
+                └──────────┬──────────┘
+                           │
+   ┌───────────────────────┼───────────────────────┐
+   │ VPC (dedicated, or bring-your-own subnet_ids)  │
+   │                       │                        │
+   │            ┌──────────▼──────────┐  S3 gateway        ┌──────────────┐
+   │            │     ECS Fargate     │  endpoint          │  S3 Bucket   │
+   │            │   ┌─────────────┐   │  (always, free) ──▶│ (+ regional  │
+   │            │   │  stdapi.ai  │   │             │      │  buckets,    │
+   │            │   │  Container  │   │             │      │  KMS-encr.)  │
+   │            │   └─────────────┘   │             │      └──────────────┘
+   │            │  app subnet (private)             │
+   │            └──────────┬──────────┘             │
+   │     egress to Bedrock, Polly, Transcribe, …    │
+   │     uses exactly ONE of (mutually exclusive):  │
+   │       • NAT gateways            (default)      │
+   │       • Interface VPC endpoints (no-internet)  │
+   └───────────────────────┬───────────────────────┘
+                           │
+                ┌──────────▼──────────┐
+                │      CloudWatch      │
+                └─────────────────────┘
 ```
+
+### What gets provisioned, and when
+
+| Component                                                                                                                                                                         | Created when                                                                                                                                                                                                                                                                                                                                                   |
+|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Dedicated VPC, private app subnets, ECS Fargate service, KMS-encrypted S3 bucket(s), **S3 gateway endpoint**, CloudWatch logs                                                     | Always — unless you pass your own `subnet_ids`, which skips VPC/subnet/endpoint creation entirely                                                                                                                                                                                                                                                              |
+| **NAT gateways** (private internet egress)                                                                                                                                        | **Default.** Created whenever the app needs internet: AWS Marketplace auto-subscribe is on (`aws_bedrock_marketplace_auto_subscribe`, default `true`) **or** any AWS service runs outside the deployment region (e.g. multi-region `aws_bedrock_regions`). Set `nat_gateways_allowed = false` to instead make the app subnets public (cheaper, less isolated). |
+| **Interface VPC endpoints** — Bedrock, Polly, Transcribe, Comprehend, Translate, Logs, SSM, ECR, Marketplace metering (Secrets Manager only with `api_key_secretsmanager_secret`) | Only when the app needs **no** internet egress: `aws_bedrock_marketplace_auto_subscribe = false` **and** every AWS service is in the deployment region **and** `vpc_endpoints_allowed = true` (default). Replaces the NAT path — the two are never created together.                                                                                           |
+| Public subnets                                                                                                                                                                    | Only with a public ALB (`alb_enabled = true` **and** `alb_public = true`)                                                                                                                                                                                                                                                                                      |
+| ALB + HTTPS listener / ACM certificate                                                                                                                                            | `alb_enabled = true` (HTTPS when `alb_domain_name` / `alb_certificate_arn` is set; auto ACM + Route53 via `alb_domain_name`). Without an ALB the service is only reachable from inside the VPC.                                                                                                                                                                |
+| WAF (rate limiting, IP filtering)                                                                                                                                                 | `alb_waf_enabled = true` (requires `alb_enabled`)                                                                                                                                                                                                                                                                                                              |
+| API key authentication                                                                                                                                                            | One of `api_key_create`, `api_key`, `api_key_ssm_parameter`, `api_key_secretsmanager_secret`                                                                                                                                                                                                                                                                   |
+| CloudWatch alarms (error/critical logs)                                                                                                                                           | `alarms_enabled = true`                                                                                                                                                                                                                                                                                                                                        |
+| VPC Flow Logs                                                                                                                                                                     | `vpc_flow_log_enabled` (default `true`)                                                                                                                                                                                                                                                                                                                        |
 
 ## Examples & Integration
 
@@ -154,13 +165,14 @@ For integration patterns against existing infrastructure (BYO VPC, ALB, Route53 
 |------|---------|
 | <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 1.5.0 |
 | <a name="requirement_aws"></a> [aws](#requirement\_aws) | >= 6.0.0 |
+| <a name="requirement_random"></a> [random](#requirement\_random) | >= 3.0.0 |
 
 ## Providers
 
 | Name | Version |
 |------|---------|
 | <a name="provider_aws"></a> [aws](#provider\_aws) | >= 6.0.0 |
-| <a name="provider_random"></a> [random](#provider\_random) | n/a |
+| <a name="provider_random"></a> [random](#provider\_random) | >= 3.0.0 |
 
 ## Modules
 
@@ -306,7 +318,7 @@ For integration patterns against existing infrastructure (BYO VPC, ALB, Route53 
 | <a name="input_aws_transcribe_s3_bucket"></a> [aws\_transcribe\_s3\_bucket](#input\_aws\_transcribe\_s3\_bucket) | AWS S3 bucket name for temporary file storage during transcription. Defaults to aws\_s3\_bucket if not specified. | `string` | `null` | no |
 | <a name="input_aws_translate_region"></a> [aws\_translate\_region](#input\_aws\_translate\_region) | AWS region for Translate text translation service. Default to first var.aws\_bedrock\_regions region or the current region. | `string` | `null` | no |
 | <a name="input_cloudwatch_logs_retention_in_days"></a> [cloudwatch\_logs\_retention\_in\_days](#input\_cloudwatch\_logs\_retention\_in\_days) | Cloudwatch logs retention in days. | `number` | `365` | no |
-| <a name="input_container_insight"></a> [container\_insight](#input\_container\_insight) | Container insight configuration. Valid values: 'enhanced', 'enabled', 'disabled'. Default to 'enhanced'. | `string` | `"enabled"` | no |
+| <a name="input_container_insight"></a> [container\_insight](#input\_container\_insight) | Container insight configuration. Valid values: 'enhanced', 'enabled', 'disabled'. Default to 'enabled'. | `string` | `"enabled"` | no |
 | <a name="input_cors_allow_origins"></a> [cors\_allow\_origins](#input\_cors\_allow\_origins) | List of origins allowed to make cross-origin requests (CORS). Use ['*'] to allow all origins. Default to no CORS headers. | `list(string)` | `null` | no |
 | <a name="input_cpu"></a> [cpu](#input\_cpu) | ECS task CPU count. Valid values: 0.25, 0.5, 1, 2, 4, 8 & 16. Default of 0.25 vCPU is suitable for common use cases (text generation, embeddings). Increase for intensive workloads (multimodal requests, large LLM models). | `number` | `0.25` | no |
 | <a name="input_cpu_architecture"></a> [cpu\_architecture](#input\_cpu\_architecture) | CPU architecture. Valid values: 'X86\_64' or 'ARM64'. | `string` | `"ARM64"` | no |
