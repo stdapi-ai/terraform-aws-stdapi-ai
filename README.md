@@ -152,10 +152,10 @@ For integration patterns against existing infrastructure (BYO VPC, ALB, Route53 
 ## Technical Requirements
 
 - **AWS Marketplace Subscription** — [Subscribe here](https://aws.amazon.com/marketplace/pp/prodview-su2dajk5zawpo) (14-day free trial included)
-- **Terraform/OpenTofu** — Version >= 1.5.0
-- **AWS Provider** — Version >= 6.27.0
 - **AWS Regions** — All regions with ECS Fargate support
 - **IAM Permissions** — Permissions to create VPC, ECS, ALB, S3, KMS, IAM, CloudWatch resources
+
+See [Requirements](#requirements) below for exact Terraform/OpenTofu and provider version constraints.
 
 ## Security Hub Controls
 
