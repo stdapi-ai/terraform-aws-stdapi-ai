@@ -56,9 +56,10 @@ locals {
 
 module "vpc" {
   source  = "JGoutin/vpc/aws"
-  version = "~> 1.0"
+  version = "~> 1.1"
 
   name_prefix                 = local.name
+  tags                        = local.apn_tags
   internet_access_allowed     = local.internet_access_required
   nat_gateways_allowed        = var.nat_gateways_allowed
   vpc_endpoints_allowed       = var.vpc_endpoints_allowed

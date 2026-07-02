@@ -16,6 +16,10 @@ locals {
   # AWS Marketplace ECR configuration
   marketplace_ecr_repository_url = "709825985650.dkr.ecr.us-east-1.amazonaws.com/j-goutin/stdapi.ai"
   container_image                = "${local.marketplace_ecr_repository_url}:${var.version_to_deploy}-${var.cpu_architecture == "ARM64" ? "arm64" : "amd64"}"
+
+  # AWS PRM attribution tags
+  apn_product_code = "72gxmztpjz2hm5qnkkg0iiazo"
+  apn_tags         = { "aws-apn-id" = "pc:${local.apn_product_code}" }
 }
 
 # Application ID used in names
@@ -77,10 +81,11 @@ EOF
 
 module "kms_key" {
   source  = "JGoutin/kms-key/aws"
-  version = "~> 1.0"
+  version = "~> 1.2"
 
   id          = var.kms_key_id
   name_prefix = local.name
+  tags        = local.apn_tags
   policy_documents_json = concat(
     [
       data.aws_iam_policy_document.log_kms_policy.json,

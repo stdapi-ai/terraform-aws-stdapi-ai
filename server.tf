@@ -4,7 +4,8 @@ Server on ECS
 
 module "server" {
   source                            = "JGoutin/ecs-fargate/aws"
-  version                           = "~> 1.2"
+  version                           = "~> 1.3"
+  tags                              = local.apn_tags
   kms_key_id                        = module.kms_key.id
   kms_policy_dependency             = module.kms_key.policy_dependency
   subnets_ids                       = module.vpc.subnets_ids
@@ -158,6 +159,7 @@ module "server" {
 resource "aws_iam_policy" "server" {
   name   = "${local.name}-policy"
   policy = data.aws_iam_policy_document.server.json
+  tags   = local.apn_tags
 }
 
 data "aws_iam_policy_document" "server" {

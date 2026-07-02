@@ -56,9 +56,7 @@ resource "aws_acm_certificate" "main" {
     create_before_destroy = true
   }
 
-  tags = {
-    Name = local.name
-  }
+  tags = merge(local.apn_tags, { Name = local.name })
 }
 
 # Route53 records for ACM DNS validation (only for public zones when certificate_create is true)

@@ -14,9 +14,7 @@ resource "aws_security_group" "alb" {
   description = "Security group for ${local.name} ALB"
   vpc_id      = module.vpc.vpc_id
 
-  tags = {
-    Name = "${local.name}-alb"
-  }
+  tags = merge(local.apn_tags, { Name = "${local.name}-alb" })
 }
 
 # Allow inbound HTTP (IPv4)
@@ -28,6 +26,7 @@ resource "aws_vpc_security_group_ingress_rule" "alb_http_ipv4" {
   to_port           = 80
   ip_protocol       = "tcp"
   cidr_ipv4         = each.key
+  tags              = local.apn_tags
 }
 
 # Allow inbound HTTP (IPv6)
@@ -39,6 +38,7 @@ resource "aws_vpc_security_group_ingress_rule" "alb_http_ipv6" {
   to_port           = 80
   ip_protocol       = "tcp"
   cidr_ipv6         = each.key
+  tags              = local.apn_tags
 }
 
 # Allow inbound HTTPS (IPv4, only if certificate is provided)
@@ -50,6 +50,7 @@ resource "aws_vpc_security_group_ingress_rule" "alb_https_ipv4" {
   to_port           = 443
   ip_protocol       = "tcp"
   cidr_ipv4         = each.key
+  tags              = local.apn_tags
 }
 
 # Allow inbound HTTPS (IPv6, only if certificate is provided)
@@ -61,6 +62,7 @@ resource "aws_vpc_security_group_ingress_rule" "alb_https_ipv6" {
   to_port           = 443
   ip_protocol       = "tcp"
   cidr_ipv6         = each.key
+  tags              = local.apn_tags
 }
 
 # Allow outbound to ECS service
@@ -72,6 +74,7 @@ resource "aws_vpc_security_group_egress_rule" "alb_to_ecs" {
   to_port                      = local.port
   ip_protocol                  = "tcp"
   referenced_security_group_id = module.server.security_group_id
+  tags                         = local.apn_tags
 }
 
 # Allow inbound from ALB to ECS service
@@ -83,6 +86,7 @@ resource "aws_vpc_security_group_ingress_rule" "ecs_from_alb" {
   to_port                      = local.port
   ip_protocol                  = "tcp"
   referenced_security_group_id = aws_security_group.alb[0].id
+  tags                         = local.apn_tags
 }
 
 # Application Load Balancer
@@ -98,9 +102,7 @@ resource "aws_lb" "main" {
   idle_timeout               = var.alb_idle_timeout
   ip_address_type            = module.vpc.ipv6_enabled ? "dualstack" : "ipv4"
 
-  tags = {
-    Name = local.name
-  }
+  tags = merge(local.apn_tags, { Name = local.name })
 }
 
 # Target Group
@@ -116,9 +118,7 @@ resource "aws_lb_target_group" "main" {
   health_check {
     path = "/health"
   }
-  tags = {
-    Name = local.name
-  }
+  tags = merge(local.apn_tags, { Name = local.name })
 }
 
 # HTTP Listener
@@ -127,6 +127,7 @@ resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.main[0].arn
   port              = 80
   protocol          = "HTTP"
+  tags              = local.apn_tags
 
   # If HTTPS is enabled, redirect HTTP to HTTPS, otherwise forward to target group
   dynamic "default_action" {
@@ -158,6 +159,7 @@ resource "aws_lb_listener" "https" {
   protocol          = "HTTPS"
   ssl_policy        = var.alb_ssl_policy
   certificate_arn   = local.certificate_arn
+  tags              = local.apn_tags
 
   default_action {
     type             = "forward"
@@ -172,4 +174,5 @@ resource "aws_cloudwatch_log_group" "alb" {
   retention_in_days = var.cloudwatch_logs_retention_in_days
   kms_key_id        = module.kms_key.arn
   depends_on        = [module.kms_key.policy_dependency]
+  tags              = local.apn_tags
 }

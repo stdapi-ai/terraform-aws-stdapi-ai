@@ -21,6 +21,7 @@ resource "aws_cloudwatch_log_metric_filter" "error_critical_logs" {
 resource "aws_cloudwatch_metric_alarm" "error_critical_logs" {
   for_each            = var.alarms_enabled ? toset(["enabled"]) : toset([])
   alarm_name          = "${local.name}-error-critical-logs"
+  tags                = local.apn_tags
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = 1
   metric_name         = "${local.name}-ErrorCriticalCount"

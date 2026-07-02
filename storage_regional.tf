@@ -28,11 +28,12 @@ locals {
 
 module "regional_kms" {
   source   = "JGoutin/kms-key/aws"
-  version  = "~> 1.1"
+  version  = "~> 1.2"
   for_each = local.regional_buckets_to_create
 
   name_prefix = local.name
   region      = each.key
+  tags        = local.apn_tags
 }
 
 resource "aws_s3_bucket" "regional" {
@@ -40,7 +41,7 @@ resource "aws_s3_bucket" "regional" {
   region        = each.key
   bucket        = local.regional_bucket_names[each.key]
   force_destroy = !var.deletion_protection
-  tags          = { Name = local.regional_bucket_names[each.key] }
+  tags          = merge(local.apn_tags, { Name = local.regional_bucket_names[each.key] })
 }
 
 resource "aws_s3_bucket_public_access_block" "regional" {

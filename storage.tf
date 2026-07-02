@@ -27,9 +27,7 @@ resource "aws_s3_bucket" "main" {
   count         = local.create_s3_bucket ? 1 : 0
   bucket        = local.name
   force_destroy = !var.deletion_protection
-  tags = {
-    Name = local.name
-  }
+  tags          = merge(local.apn_tags, { Name = local.name })
 }
 
 resource "aws_s3_bucket_public_access_block" "main" {
