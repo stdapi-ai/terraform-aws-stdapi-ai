@@ -5,6 +5,12 @@ Application Load Balancer
 locals {
   # Use public subnets if ALB is public, otherwise use app subnets
   alb_subnets = var.alb_enabled && var.alb_public ? module.vpc.public_subnets_ids : module.vpc.subnets_ids
+
+  # Shared logs bucket needed for ALB access logs and/or the main S3 bucket's server access logs.
+  # Regional S3 buckets (storage_regional.tf) can't log here: S3 access log destinations must be in
+  # the same Region as the source bucket, and this bucket isn't Region-pinned (it lives in the
+  # provider's primary Region, alongside the main bucket).
+  logs_bucket_enabled = (var.alb_enabled && var.alb_access_logging_enabled) || local.create_s3_bucket
 }
 
 # Security Group for ALB
@@ -101,6 +107,16 @@ resource "aws_lb" "main" {
   enable_http2               = true
   idle_timeout               = var.alb_idle_timeout
   ip_address_type            = module.vpc.ipv6_enabled ? "dualstack" : "ipv4"
+  drop_invalid_header_fields = true
+
+  dynamic "access_logs" {
+    for_each = var.alb_enabled && var.alb_access_logging_enabled ? [1] : []
+    content {
+      bucket  = aws_s3_bucket.logs[0].id
+      prefix  = local.name
+      enabled = true
+    }
+  }
 
   tags = merge(local.apn_tags, { Name = local.name })
 }
@@ -167,12 +183,123 @@ resource "aws_lb_listener" "https" {
   }
 }
 
-# CloudWatch Log Group for ALB Access Logs
-resource "aws_cloudwatch_log_group" "alb" {
-  count             = var.alb_enabled ? 1 : 0
-  name              = "/aws/elasticloadbalancing/${local.name}"
-  retention_in_days = var.cloudwatch_logs_retention_in_days
-  kms_key_id        = module.kms_key.arn
-  depends_on        = [module.kms_key.policy_dependency]
-  tags              = local.apn_tags
+# Shared S3 bucket for ALB access logs and/or the main bucket's server access logs (storage.tf).
+# ELB log delivery only supports SSE-S3 (not SSE-KMS), so this bucket cannot reuse the module's
+# KMS-encrypted application bucket and must use its own default encryption.
+resource "aws_s3_bucket" "logs" {
+  count         = local.logs_bucket_enabled ? 1 : 0
+  bucket        = "${local.name}-logs"
+  force_destroy = !var.deletion_protection
+  tags          = merge(local.apn_tags, { Name = "${local.name}-logs" })
+}
+
+resource "aws_s3_bucket_public_access_block" "logs" {
+  count                   = local.logs_bucket_enabled ? 1 : 0
+  bucket                  = aws_s3_bucket.logs[0].id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "logs" {
+  count  = local.logs_bucket_enabled ? 1 : 0
+  bucket = aws_s3_bucket.logs[0].id
+  rule {
+    bucket_key_enabled = true
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "logs" {
+  count      = local.logs_bucket_enabled ? 1 : 0
+  bucket     = aws_s3_bucket.logs[0].id
+  depends_on = [aws_s3_bucket_versioning.logs]
+
+  rule {
+    id     = "expire-old-logs"
+    status = "Enabled"
+    filter {}
+    expiration {
+      days = var.cloudwatch_logs_retention_in_days
+    }
+  }
+}
+
+resource "aws_s3_bucket_versioning" "logs" {
+  count  = local.logs_bucket_enabled ? 1 : 0
+  bucket = aws_s3_bucket.logs[0].id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+# Grants ELB log delivery (region-agnostic 'logdelivery.elasticloadbalancing.amazonaws.com' service
+# principal, recommended over the legacy per-Region ELB account ID policy) and/or S3 server access
+# log delivery ('logging.s3.amazonaws.com') permission to write to this bucket. SSE-S3 only, matching
+# the bucket's own encryption above (ELB log delivery doesn't support SSE-KMS destinations).
+data "aws_iam_policy_document" "logs" {
+  count = local.logs_bucket_enabled ? 1 : 0
+
+  dynamic "statement" {
+    for_each = var.alb_enabled && var.alb_access_logging_enabled ? [1] : []
+    content {
+      sid    = "AWSLogDeliveryWrite"
+      effect = "Allow"
+      principals {
+        type        = "Service"
+        identifiers = ["logdelivery.elasticloadbalancing.amazonaws.com"]
+      }
+      actions   = ["s3:PutObject"]
+      resources = ["${aws_s3_bucket.logs[0].arn}/${local.name}/AWSLogs/${data.aws_caller_identity.current.account_id}/*"]
+    }
+  }
+
+  dynamic "statement" {
+    for_each = local.create_s3_bucket ? [1] : []
+    content {
+      sid    = "S3ServerAccessLogsPolicy"
+      effect = "Allow"
+      principals {
+        type        = "Service"
+        identifiers = ["logging.s3.amazonaws.com"]
+      }
+      actions   = ["s3:PutObject"]
+      resources = ["${aws_s3_bucket.logs[0].arn}/s3-access-logs/*"]
+      condition {
+        test     = "StringEquals"
+        variable = "aws:SourceAccount"
+        values   = [data.aws_caller_identity.current.account_id]
+      }
+      condition {
+        test     = "ArnLike"
+        variable = "aws:SourceArn"
+        values   = [aws_s3_bucket.main[0].arn]
+      }
+    }
+  }
+
+  statement {
+    sid    = "EnforceTLS"
+    effect = "Deny"
+    principals {
+      type        = "AWS"
+      identifiers = ["*"]
+    }
+    actions   = ["s3:*"]
+    resources = [aws_s3_bucket.logs[0].arn, "${aws_s3_bucket.logs[0].arn}/*"]
+    condition {
+      test     = "Bool"
+      variable = "aws:SecureTransport"
+      values   = ["false"]
+    }
+  }
+}
+
+resource "aws_s3_bucket_policy" "logs" {
+  count  = local.logs_bucket_enabled ? 1 : 0
+  bucket = aws_s3_bucket.logs[0].id
+  policy = data.aws_iam_policy_document.logs[0].json
 }

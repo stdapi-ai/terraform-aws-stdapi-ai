@@ -157,6 +157,120 @@ For integration patterns against existing infrastructure (BYO VPC, ALB, Route53 
 - **AWS Regions** — All regions with ECS Fargate support
 - **IAM Permissions** — Permissions to create VPC, ECS, ALB, S3, KMS, IAM, CloudWatch resources
 
+## Security Hub Controls
+
+This module composes `terraform-aws-vpc`, `terraform-aws-ecs-fargate` and `terraform-aws-kms-key`. The tables below give each child module's controls **as they actually resolve given the parameters this module passes** — not the child modules' standalone defaults, which sometimes differ (e.g. this module always passes a non-null `tags` value and a 365-day `cloudwatch_logs_retention_in_days`, which changes several outcomes). See each repo's own README for the full control reference and remediation detail; only the controls whose resolution is worth calling out are listed here.
+
+### VPC module (`terraform-aws-vpc`)
+
+Key inputs this module passes: `tags = local.apn_tags` (never null), `vpc_flow_log_retention_days = var.cloudwatch_logs_retention_in_days` (default `365`, matching the child module's own default), `internet_access_allowed = local.internet_access_required` (computed — **defaults to `true`** here, since `aws_bedrock_marketplace_auto_subscribe` defaults to `null`, which resolves to "auto-subscribe enabled" and requires internet access for the AWS Marketplace API), `nat_gateways_allowed = var.nat_gateways_allowed` (default `true`), `vpc_endpoints_services` already includes `s3`, `ssm`, `logs`, `ecr.api`, `ecr.dkr` by default (see `network.tf`).
+
+Severity: 🔴 Critical · 🟠 High · 🟡 Medium · 🔵 Low
+
+| Control | Severity | Title | Status | Notes |
+|---|---|---|---|---|
+| EC2.2 | 🟠 High | VPC default security groups should restrict all traffic | ✅ Pass | Unconditional in the VPC module. |
+| EC2.6 | 🟡 Medium | VPC flow logging should be enabled in all VPCs | ✅ Pass | `vpc_flow_log_enabled` defaults `true`, not overridden. |
+| EC2.15 | 🟡 Medium | EC2 subnets should not automatically assign public IP addresses | ✅ Pass | Even though `internet_access_allowed` is `true` by default, `nat_gateways_allowed` also defaults `true`, so NAT (not public IPs) handles egress. Setting `nat_gateways_allowed = false` would fail this control. |
+| EC2.21 | 🟡 Medium | Network ACLs should not allow ingress from 0.0.0.0/0 to port 22/3389 | ✅ Pass | This module sets `public_to_app_ports` to port 8000 and `public_ingress_ports` to 80/443 — never 22/3389. |
+| EC2.53 / EC2.54 / EC2.13 / EC2.14 | 🟠 High | Security groups should not allow ingress from 0.0.0.0/0 to remote administration ports | ✅ Pass | Unconditional in the VPC module. |
+| EC2.12 | 🔵 Low | Unused EIPs should be removed | ✅ Pass | Unconditional. |
+| EC2.37 / EC2.39 / EC2.40 / EC2.41 / EC2.42 / EC2.43 / EC2.44 / EC2.46 / EC2.174 | 🔵 Low | Various VPC resources should be tagged | ✅ Pass | Unconditional (a `Name` tag is always merged in regardless of `tags`). |
+| EC2.48 | 🔵 Low | VPC flow logs should be tagged | ✅ Pass | The flow log applies `tags` directly with no fallback — this module passes `local.apn_tags` (non-null), so it's actually tagged. Would fail if `tags` were left at the VPC module's own default (`null`). |
+| IAM.24 | 🔵 Low | IAM roles should be tagged | ✅ Pass | Same reasoning as EC2.48, for the flow log's IAM role. |
+| CloudWatch.16 | 🟡 Medium | CloudWatch log groups should be retained for a specified time period | ✅ Pass | `vpc_flow_log_retention_days` is set to `var.cloudwatch_logs_retention_in_days` (default `365`), matching the VPC module's own default (also `365`) — kept as an explicit pass-through so this module's single retention variable stays authoritative across all child modules. |
+| EC2.55 / EC2.56 / EC2.57 / EC2.58 / EC2.60 | 🟡 Medium | VPCs should be configured with an interface endpoint for ECR API / Docker Registry / SSM / SSM Incident Manager Contacts / SSM Incident Manager | ⚠️ Conditional (default: ❌ Fail) | `vpc_endpoints_services` already requests `ecr.api`/`ecr.dkr`/`ssm` by default — but that request only takes effect when there's no direct internet route, and by default there is one (see above). The request is a silent no-op under default settings. Set `compliance_vpc_endpoints_enabled = true` to actually get these 5 endpoints created, since that path is enforced regardless of internet posture. |
+| — (not a Security Hub control) | — | GuardDuty Runtime Monitoring endpoint | Off by default | Set `guardduty_vpc_endpoint_enabled = true` if using GuardDuty Runtime Monitoring; also enforced regardless of internet posture. |
+
+### KMS module (`terraform-aws-kms-key`)
+
+Key inputs: this module builds `policy_documents_json` itself (its own log-encryption statement, plus whatever `module.vpc`/`module.server` need added) and always passes non-null `tags`. The per-Bedrock-region keys (`module.regional_kms`) pass only `name_prefix`, `region` and `tags` — no `policy_documents_json` override.
+
+Severity: 🔴 Critical · 🟠 High · 🟡 Medium · 🔵 Low
+
+| Control | Severity | Title | Status | Notes |
+|---|---|---|---|---|
+| KMS.1 / KMS.2 | 🟡 Medium | IAM policies/inline policies should not allow decryption on all KMS keys | ⬜ N/A | No IAM policies are created by the KMS module. |
+| KMS.3 | 🔴 Critical | KMS keys should not be deleted unintentionally | ✅ Pass | No `deletion_window_in_days` override — AWS's 30-day maximum applies. |
+| KMS.4 | 🟡 Medium | KMS key rotation should be enabled | ✅ Pass | Hardcoded in the KMS module for every key it creates, including the regional ones. |
+| KMS.5 | 🔴 Critical | KMS keys should not be publicly accessible | ✅ Pass | Every statement merged into `policy_documents_json` (this module's log policy, plus `module.vpc.kms_policy_documents_json` and `module.server.kms_policy_documents_json`) scopes a specific AWS service principal with an `ArnLike`/`StringEquals` condition — none is a wildcard principal. The regional keys use the KMS module's safe root-only default. |
+
+### ECS module (`terraform-aws-ecs-fargate`)
+
+Key inputs: `tags = local.apn_tags` (never null), `assign_public_ip = local.internet_access_required && !var.nat_gateways_allowed`, `container_insight = var.container_insight` (default `"enabled"`), `cloudwatch_logs_retention_in_days = var.cloudwatch_logs_retention_in_days` (default `365`), no `security_group_rules_ingress`/`security_group_connect_ingress` passed, and the `main` container definition sets `read_only_root_filesystem = true` but never sets `user`, and its only mount point (`/tmp`) is ephemeral, not EFS.
+
+Severity: 🔴 Critical · 🟠 High · 🟡 Medium · 🔵 Low
+
+| Control | Severity | Title | Status | Notes |
+|---|---|---|---|---|
+| ECS.2 | 🟠 High | Services should not have public IP addresses assigned automatically | ✅ Pass | `assign_public_ip` is always `false` in the default composition, since `nat_gateways_allowed` defaults `true` — regardless of `internet_access_required`. Would fail only if `nat_gateways_allowed` is set to `false`. |
+| ECS.3 / ECS.4 / ECS.9 | 🟠 High | Various ECS controls (host PID namespace, non-privileged, logging config) | ✅ Pass | Same as the ECS module's own unconditional defaults — this module doesn't change any of these. |
+| ECS.16 | 🟠 High | ECS task sets should not automatically assign public IP addresses | ⬜ N/A | Module manages `aws_ecs_service` directly, never `aws_ecs_task_set`. |
+| ECS.10 / ECS.17 / ECS.18 | 🟡 Medium | Various ECS controls (Fargate platform version, host network mode, EFS in-transit encryption) | ✅ Pass | Same as the ECS module's own unconditional defaults — this module doesn't change any of these. |
+| ECS.19 / ECS.21 | 🟡 Medium | Capacity provider termination protection / non-administrator users for Windows containers | ⬜ N/A | Only Fargate capacity providers and Linux containers are used. |
+| ECS.14 | 🔵 Low | ECS clusters should be tagged | ✅ Pass | The cluster always receives a `Name` tag regardless of `tags`. |
+| ECS.5 | 🟠 High | Task definitions should use read-only root filesystems | ✅ Pass | `read_only_root_filesystem = true` is explicitly set on the `main` container in `server.tf`. |
+| ECS.8 | 🟠 High | Secrets should not be passed as container environment variables | ✅ Pass | The API key is passed via `secrets`, never `environment`. |
+| ECS.12 | 🟡 Medium | ECS clusters should use Container Insights | ✅ Pass | `container_insight` defaults to `"enabled"`. |
+| ECS.13 / ECS.15 | 🔵 Low | Service / task definition should be tagged | ✅ Pass | `tags = local.apn_tags` (non-null) is forwarded — these two resources apply that value directly with no fallback, so they're actually tagged, unlike the ECS module's own default (`null`). |
+| ECS.20 | 🟡 Medium | Task definitions should configure non-root users for Linux containers | ✅ Pass | `user = "65532:65532"` is set explicitly on the `main` container, matching the Chainguard `python:latest` base image's actual default non-root user (`nonroot`, uid/gid 65532) — a declaration of existing behavior, not a change to it. |
+| EC2.13 / EC2.14 / EC2.18 / EC2.53 / EC2.54 | 🟠 High | Security groups should not allow unrestricted/admin-port ingress | ✅ Pass | No `security_group_rules_ingress`/`security_group_connect_ingress` are passed. The only extra ingress rule (`aws_vpc_security_group_ingress_rule.ecs_from_alb` in `alb.tf`) references the ALB's security group, never a CIDR. |
+| EC2.19 | 🔴 Critical | Security groups should not allow unrestricted access to ports with high risk | ✅ Pass | Same reasoning as EC2.13/14/18/53/54 above. |
+| EC2.43 | 🔵 Low | Security groups should be tagged | ✅ Pass | Unconditional. |
+| EFS.1 – EFS.4 / EFS.6 – EFS.8 | 🟡 Medium | Various EFS controls | ⬜ N/A | This module's only mount point (`/tmp`) uses ephemeral storage (`efs` isn't set to `true`), so no EFS resources exist at all. |
+| EFS.5 | 🔵 Low | EFS access points should be tagged | ⬜ N/A | Same reason — no EFS resources exist. |
+| CloudWatch.15 | 🟠 High | CloudWatch alarms should have specified actions configured | ⚠️ Conditional (default: N/A — no alarms) | `alarms_enabled` defaults `false`, so no alarms exist to evaluate. Set `alarms_enabled = true` and `sns_topic_arn` to pass. |
+| CloudWatch.16 | 🟡 Medium | CloudWatch log groups should be retained for a specified time period | ✅ Pass | `cloudwatch_logs_retention_in_days` defaults `365`, applied to every log group the ECS module creates, including Container Insights. |
+| CloudWatch.17 | 🟠 High | CloudWatch alarm actions should be activated | ✅ Pass | Unconditional. |
+| IAM.1 | 🟠 High | IAM policies should not allow full "*" administrative privileges | ✅ Pass | The ECS module's own execution/task role policies use no wildcard actions (also true of this module's separate `aws_iam_policy.server`, listed below). |
+
+### This module's own resources (ALB, WAFv2, ACM/Route 53, S3, aggregated IAM policy)
+
+Severity: 🔴 Critical · 🟠 High · 🟡 Medium · 🔵 Low
+
+| Control | Severity | Title | Status | Options to pass |
+|---|---|---|---|---|
+| ELB.1 | 🟡 Medium | Application Load Balancers should be configured to redirect all HTTP requests to HTTPS | ⚠️ Conditional (default: ❌ Fail) | The HTTP listener only redirects to HTTPS when a certificate exists. Set `alb_certificate_arn` or `alb_domain_name` (with a resolvable Route 53 zone) to get a certificate and enable the redirect. Only relevant when `alb_enabled = true` (default `false`). |
+| ELB.4 | 🟡 Medium | ALB should be configured to drop invalid HTTP headers | ✅ Pass | `drop_invalid_header_fields = true` is hardcoded; not configurable (no legitimate reason to disable it). |
+| ELB.5 | 🟡 Medium | Application Load Balancers should have logging enabled | ⚠️ Conditional (default: ✅ Pass) | Set `alb_access_logging_enabled = true` (default) to pass — a dedicated SSE-S3-encrypted `aws_s3_bucket.alb_logs` is created and wired to the load balancer's `access_logs` block. Setting it to `false` fails this control. The previous `aws_cloudwatch_log_group.alb` (dead code — ALB access logs can only go to S3, not CloudWatch) has been removed. |
+| ELB.6 | 🟡 Medium | Application, Network, and Gateway Load Balancers should have deletion protection enabled | ⚠️ Conditional (default: ❌ Fail) | Set `deletion_protection = true` (default `false`) to pass. |
+| ELB.12 | 🟡 Medium | Application Load Balancers should be configured with defensive or strictest desync mitigation mode | ✅ Pass | Not set explicitly, but AWS's own default (`defensive`) satisfies the control. |
+| ELB.13 | 🟡 Medium | Application, Network, and Gateway Load Balancers should span multiple Availability Zones | ⚠️ Conditional (default: ✅ Pass) | Subnets come from the VPC module, which uses all available AZs by default (`availability_zones_count = null`) — always ≥2 in practice. Passes unless `availability_zones_count` is explicitly set to `1`. |
+| ELB.16 | 🟡 Medium | Application Load Balancers should be associated with a WAF web ACL | ⚠️ Conditional (default: ❌ Fail) | Set `alb_waf_enabled = true` (default `false`) to pass, in addition to `alb_enabled = true`. |
+| ELB.17 | 🟡 Medium | Application/Network Load Balancer listeners should use recommended security policies | ⚠️ Conditional (default: ✅ Pass once HTTPS exists, N/A otherwise) | `alb_ssl_policy` defaults to `ELBSecurityPolicy-TLS13-1-2-Res-PQ-2025-09`, one of AWS's recommended policies. Only applies once the HTTPS listener exists (see ELB.1). |
+| ELB.18 | 🟡 Medium | ALB/NLB listeners should be configured with a secure listener protocol | ❌ Fail | The HTTP listener (port 80) is always created with `protocol = "HTTP"`; there's no exemption for a redirect-only listener. Unavoidable while any HTTP listener exists — inherent to offering both HTTP and HTTPS. |
+| ELB.21 | 🟡 Medium | ELB target groups should have health check configured with encrypted protocol | ❌ Fail | The target group's health check uses the default `HTTP` protocol; no variable exposes HTTPS health checks. Requires a code change to pass. |
+| ELB.22 | 🟡 Medium | ELB target groups should use encrypted transport protocol | ❌ Fail | The target group forwards to the ECS task over plain `HTTP` on the container port (TLS is terminated at the ALB, not re-established to the backend). Requires a code change (HTTPS target group + TLS-terminating container) to pass. |
+| ELB.2 / ELB.3 / ELB.8 / ELB.9 / ELB.10 / ELB.14 | 🟡 Medium | Various Classic Load Balancer controls | ⬜ N/A | Module only creates an Application Load Balancer, never a Classic Load Balancer. |
+| ELB.7 | 🔵 Low | CLB connection draining should be enabled | ⬜ N/A | Module only creates an Application Load Balancer, never a Classic Load Balancer. |
+| WAFV2.1 (AWS WAF `WAF.10`) | 🟡 Medium | AWS WAF web ACLs should have at least one rule or rule group | ⚠️ Conditional (default: N/A — no WAF created; ✅ Pass once enabled) | Gated by `alb_enabled && alb_waf_enabled` (both default `false`). Once enabled, three AWS managed rule groups are always attached — never empty. |
+| WAFV2.2 (AWS WAF `WAF.11`) | 🔵 Low | AWS WAF web ACL logging should be enabled | ⚠️ Conditional (default: N/A — no WAF created; ✅ Pass once enabled) | `alb_waf_logging_enabled` defaults `true`, so logging is on whenever WAF is created. Setting it to `false` fails this control. |
+| ACM.1 | 🟡 Medium | Imported and ACM-issued certificates should be renewed after a specified time period | ✅ Pass | The certificate uses DNS validation (`validation_method = "DNS"`), which ACM renews automatically. |
+| ACM.2 | 🟠 High | RSA certificates managed by ACM should use a key length of at least 2,048 bits | ✅ Pass | `key_algorithm` isn't set, so ACM uses its default `RSA_2048`. |
+| ACM.3 | 🔵 Low | ACM certificates should be tagged | ✅ Pass | Tagged via `local.apn_tags` plus a `Name` tag. |
+| Route53.1 | 🔵 Low | Route 53 health checks should be tagged | ⬜ N/A | Module creates no `aws_route53_health_check` resource. |
+| Route53.2 | 🟡 Medium | Route 53 public hosted zones should log DNS queries | ⬜ N/A | The module only looks up or references an existing hosted zone — it never creates one, so this is outside its control. |
+| S3.2 / S3.3 | 🔴 Critical | S3 buckets should block public read/write access | ✅ Pass | `aws_s3_bucket_public_access_block` sets all four flags to `true` for every bucket (main and regional). |
+| S3.8 | 🟠 High | S3 buckets should block public access (account/bucket combined check) | ✅ Pass | Same `aws_s3_bucket_public_access_block` configuration as S3.2/S3.3. |
+| S3.5 | 🟡 Medium | S3 buckets should require requests to use SSL | ✅ Pass | Bucket policy denies all `s3:*` actions when `aws:SecureTransport` is false. |
+| S3.6 | 🟠 High | S3 bucket policies should restrict access to other AWS accounts | ✅ Pass | The only statement is the TLS-enforcement `Deny`; no cross-account `Allow`. |
+| S3.9 | 🟡 Medium | S3 buckets should have server access logging enabled | ✅ Pass | The main bucket logs to a shared SSE-S3-encrypted `aws_s3_bucket.logs` (also used for ALB access logs, `alb.tf`). Each regional bucket logs to its own per-Region `aws_s3_bucket.regional_logs` (`storage_regional.tf`) — S3 access log destinations must be in the same Region as their source bucket (confirmed via AWS's own docs), so a single cross-Region log bucket isn't possible; this mirrors the existing per-Region `regional_kms` pattern. |
+| S3.10 | 🟡 Medium | S3 buckets with versioning enabled should have lifecycle configurations | ✅ Pass | Every bucket gets an unconditional lifecycle configuration (tmp cleanup, files expiration, intelligent-tiering). |
+| S3.13 | 🔵 Low | S3 buckets should have lifecycle configurations | ✅ Pass | Same lifecycle configuration as S3.10. |
+| S3.11 | 🟡 Medium | S3 buckets should have event notifications enabled | ✅ Pass | `aws_s3_bucket_notification` with `eventbridge = true` is set unconditionally on the main and every regional bucket — zero-config, no targets/rules required, no cost unless rules are later added. |
+| S3.12 | 🟡 Medium | ACLs should not be used to manage access to S3 buckets | ✅ Pass | No ACL is configured; new buckets default to `BucketOwnerEnforced` (ACLs disabled). |
+| S3.14 | 🔵 Low | S3 buckets should have versioning enabled | ✅ Pass | `status = "Enabled"` unconditionally on every bucket. |
+| S3.15 | 🟡 Medium | S3 buckets should have Object Lock enabled | ⬜ N/A | Object Lock (WORM immutability) doesn't fit this bucket's purpose — it's mainly temporary storage with active expiration lifecycle rules (1-day tmp cleanup, 30-day Files API expiration), the opposite of what Object Lock is for. |
+| S3.17 | 🟡 Medium | S3 buckets should be encrypted at rest with AWS KMS keys | ✅ Pass | SSE-KMS with a dedicated customer-managed key, `bucket_key_enabled = true`, for every bucket. |
+| S3.20 | 🔵 Low | S3 buckets should have MFA delete enabled | ⬜ N/A (exempt) | AWS's own control text exempts buckets that have a lifecycle configuration — both `main` and `regional` buckets always have one, so this control never evaluates them. |
+| S3.22 / S3.23 | 🟡 Medium | S3 buckets should log object-level read/write events | ⬜ N/A | Account-level control requiring an org-wide multi-Region CloudTrail trail; outside this module's scope. |
+| IAM.1 | 🟠 High | IAM policies should not allow full administrative privileges | ✅ Pass | `aws_iam_policy.server`'s statements all use specific actions (`bedrock:*`, `s3:*` object-level actions, etc.); none use `Action: "*"`. |
+| IAM.21 | 🔵 Low | IAM customer managed policies should not allow wildcard actions for services | ✅ Pass | Same statements as IAM.1 — no wildcard (`service:*`) actions. |
+
+**Overall summary — with every variable at its default:**
+- **VPC/ECS/KMS child modules:** thanks to this module always passing non-null `tags`, several controls that fail by default in the *standalone* child modules (EC2.48, IAM.24, ECS.13/ECS.15) actually **pass** here. CloudWatch.16 now passes by default in both child modules directly (their own `vpc_flow_log_retention_days`/`cloudwatch_logs_retention_in_days` defaults were uniformized to `365`), and ECS.20 also now passes (explicit `user`). One gap remains: **EC2.55/EC2.56/EC2.57/EC2.58/EC2.60** — the interface endpoints this module already requests in `vpc_endpoints_services` are silently ineffective by default, because internet access is required for AWS Marketplace auto-subscribe. Set `compliance_vpc_endpoints_enabled = true` to actually get them.
+- **This module's own resources:** with `alb_enabled = false` (default), none of the ALB/WAF/ACM controls apply — no load balancer exists. Once `alb_enabled = true`, ELB.4 and ELB.5 now pass out of the box (dropped invalid headers, S3 access logging with a dedicated bucket). The ALB still fails **ELB.18, ELB.21, ELB.22 unconditionally** — these would require re-architecting to terminate TLS on the backend as well, not just adding a variable — and fails **ELB.1, ELB.6, ELB.16 by default** until their respective variables are set. The S3 buckets (created by default) now pass **S3.9 and S3.11** unconditionally too; S3.15 (Object Lock) doesn't apply given this bucket's temporary-storage purpose.
+
 ---
 
 # Terraform Documentation
@@ -192,7 +306,6 @@ For integration patterns against existing infrastructure (BYO VPC, ALB, Route53 
 | ---- | ---- |
 | [aws_acm_certificate.main](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/acm_certificate) | resource |
 | [aws_acm_certificate_validation.main](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/acm_certificate_validation) | resource |
-| [aws_cloudwatch_log_group.alb](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudwatch_log_group) | resource |
 | [aws_cloudwatch_log_group.waf](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudwatch_log_group) | resource |
 | [aws_cloudwatch_log_metric_filter.error_critical_logs](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudwatch_log_metric_filter) | resource |
 | [aws_cloudwatch_metric_alarm.error_critical_logs](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudwatch_metric_alarm) | resource |
@@ -205,18 +318,34 @@ For integration patterns against existing infrastructure (BYO VPC, ALB, Route53 
 | [aws_route53_record.acm_validation](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/route53_record) | resource |
 | [aws_route53_record.main](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/route53_record) | resource |
 | [aws_route53_record.main_ipv6](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/route53_record) | resource |
+| [aws_s3_bucket.logs](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket) | resource |
 | [aws_s3_bucket.main](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket) | resource |
 | [aws_s3_bucket.regional](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket) | resource |
+| [aws_s3_bucket.regional_logs](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket) | resource |
+| [aws_s3_bucket_lifecycle_configuration.logs](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_lifecycle_configuration) | resource |
 | [aws_s3_bucket_lifecycle_configuration.main](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_lifecycle_configuration) | resource |
 | [aws_s3_bucket_lifecycle_configuration.regional](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_lifecycle_configuration) | resource |
+| [aws_s3_bucket_lifecycle_configuration.regional_logs](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_lifecycle_configuration) | resource |
+| [aws_s3_bucket_logging.main](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_logging) | resource |
+| [aws_s3_bucket_logging.regional](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_logging) | resource |
+| [aws_s3_bucket_notification.main](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_notification) | resource |
+| [aws_s3_bucket_notification.regional](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_notification) | resource |
+| [aws_s3_bucket_policy.logs](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_policy) | resource |
 | [aws_s3_bucket_policy.main](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_policy) | resource |
 | [aws_s3_bucket_policy.regional](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_policy) | resource |
+| [aws_s3_bucket_policy.regional_logs](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_policy) | resource |
+| [aws_s3_bucket_public_access_block.logs](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_public_access_block) | resource |
 | [aws_s3_bucket_public_access_block.main](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_public_access_block) | resource |
 | [aws_s3_bucket_public_access_block.regional](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_public_access_block) | resource |
+| [aws_s3_bucket_public_access_block.regional_logs](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_public_access_block) | resource |
+| [aws_s3_bucket_server_side_encryption_configuration.logs](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_server_side_encryption_configuration) | resource |
 | [aws_s3_bucket_server_side_encryption_configuration.main](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_server_side_encryption_configuration) | resource |
 | [aws_s3_bucket_server_side_encryption_configuration.regional](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_server_side_encryption_configuration) | resource |
+| [aws_s3_bucket_server_side_encryption_configuration.regional_logs](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_server_side_encryption_configuration) | resource |
+| [aws_s3_bucket_versioning.logs](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_versioning) | resource |
 | [aws_s3_bucket_versioning.main](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_versioning) | resource |
 | [aws_s3_bucket_versioning.regional](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_versioning) | resource |
+| [aws_s3_bucket_versioning.regional_logs](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_versioning) | resource |
 | [aws_security_group.alb](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/security_group) | resource |
 | [aws_vpc_security_group_egress_rule.alb_to_ecs](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/vpc_security_group_egress_rule) | resource |
 | [aws_vpc_security_group_ingress_rule.alb_http_ipv4](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/vpc_security_group_ingress_rule) | resource |
@@ -231,8 +360,10 @@ For integration patterns against existing infrastructure (BYO VPC, ALB, Route53 
 | [random_password.api_key](https://registry.terraform.io/providers/hashicorp/random/latest/docs/resources/password) | resource |
 | [aws_caller_identity.current](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/caller_identity) | data source |
 | [aws_iam_policy_document.log_kms_policy](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
+| [aws_iam_policy_document.logs](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
 | [aws_iam_policy_document.main_bucket_policy](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
 | [aws_iam_policy_document.regional_bucket_policy](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
+| [aws_iam_policy_document.regional_logs](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
 | [aws_iam_policy_document.server](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
 | [aws_region.current](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/region) | data source |
 | [aws_route53_zone.by_name](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/route53_zone) | data source |
@@ -244,6 +375,7 @@ For integration patterns against existing infrastructure (BYO VPC, ALB, Route53 
 | ---- | ----------- | ---- | ------- | :------: |
 | <a name="input_ai_response_timeout"></a> [ai\_response\_timeout](#input\_ai\_response\_timeout) | Maximum time in seconds to wait for an AI model to complete a response. Applies to both streaming and non-streaming requests. The default of 600 seconds accommodates models with extended reasoning. Increase for long-running requests (e.g., large document analysis); decrease to fail fast on unexpectedly slow responses. Default to 600. | `number` | `null` | no |
 | <a name="input_alarms_enabled"></a> [alarms\_enabled](#input\_alarms\_enabled) | Enable CloudWatch alarms. This should be set to true if sns\_topic\_arn is provided. | `bool` | `false` | no |
+| <a name="input_alb_access_logging_enabled"></a> [alb\_access\_logging\_enabled](#input\_alb\_access\_logging\_enabled) | If true, enable ALB access logging to a dedicated S3 bucket. Security Hub: ELB.5 (Application Load Balancers should have logging enabled) — default true = pass; only relevant when var.alb\_enabled is true. | `bool` | `true` | no |
 | <a name="input_alb_certificate_arn"></a> [alb\_certificate\_arn](#input\_alb\_certificate\_arn) | Existing ACM certificate ARN to attach to the HTTPS listener. When specified, takes precedence over certificate\_create. If not specified and certificate\_create is true, a certificate will be created automatically. | `string` | `null` | no |
 | <a name="input_alb_certificate_create"></a> [alb\_certificate\_create](#input\_alb\_certificate\_create) | If true, create an ACM certificate and validate it via DNS. Only used when certificate\_arn is not specified. Requires route53\_zone\_id, domain\_name, and route53\_zone\_private=false. | `bool` | `true` | no |
 | <a name="input_alb_domain_name"></a> [alb\_domain\_name](#input\_alb\_domain\_name) | Primary domain name for the application (e.g., api.example.com). Creates Route53 A record and ACM certificate. If route53\_zone\_id is not specified, automatically looks up the most specific parent domain zone. | `string` | `null` | no |
@@ -320,8 +452,9 @@ For integration patterns against existing infrastructure (BYO VPC, ALB, Route53 
 | <a name="input_aws_transcribe_region"></a> [aws\_transcribe\_region](#input\_aws\_transcribe\_region) | AWS region for Transcribe speech-to-text service. Default to first var.aws\_bedrock\_regions region or the current region. | `string` | `null` | no |
 | <a name="input_aws_transcribe_s3_bucket"></a> [aws\_transcribe\_s3\_bucket](#input\_aws\_transcribe\_s3\_bucket) | AWS S3 bucket name for temporary file storage during transcription. Defaults to aws\_s3\_bucket if not specified. | `string` | `null` | no |
 | <a name="input_aws_translate_region"></a> [aws\_translate\_region](#input\_aws\_translate\_region) | AWS region for Translate text translation service. Default to first var.aws\_bedrock\_regions region or the current region. | `string` | `null` | no |
-| <a name="input_cloudwatch_logs_retention_in_days"></a> [cloudwatch\_logs\_retention\_in\_days](#input\_cloudwatch\_logs\_retention\_in\_days) | Cloudwatch logs retention in days. | `number` | `365` | no |
-| <a name="input_container_insight"></a> [container\_insight](#input\_container\_insight) | Container insight configuration. Valid values: 'enhanced', 'enabled', 'disabled'. Default to 'enabled'. | `string` | `"enabled"` | no |
+| <a name="input_cloudwatch_logs_retention_in_days"></a> [cloudwatch\_logs\_retention\_in\_days](#input\_cloudwatch\_logs\_retention\_in\_days) | Cloudwatch logs retention in days. Applies to every log group this module and its child modules create, including the Container Insights performance log group. Security Hub: CloudWatch.16 (CloudWatch log groups should be retained for a specified time period) requires at least 365 days by default — default 365 = pass; lowering it fails this control. | `number` | `365` | no |
+| <a name="input_compliance_vpc_endpoints_enabled"></a> [compliance\_vpc\_endpoints\_enabled](#input\_compliance\_vpc\_endpoints\_enabled) | If true, add the interface VPC endpoints for ECR API, ECR Docker Registry, Systems Manager, SSM Incident Manager Contacts and SSM Incident Manager. Enable only if you have high compliance requirements — each interface endpoint adds cost. Security Hub: EC2.55/EC2.56/EC2.57/EC2.58/EC2.60 — default false = fail; set to true to pass. | `bool` | `false` | no |
+| <a name="input_container_insight"></a> [container\_insight](#input\_container\_insight) | Container insight configuration. Valid values: 'enhanced', 'enabled', 'disabled'. Default to 'enabled'. Security Hub: ECS.12 (ECS clusters should use Container Insights) — default 'enabled' = pass; setting 'disabled' fails this control. | `string` | `"enabled"` | no |
 | <a name="input_cors_allow_origins"></a> [cors\_allow\_origins](#input\_cors\_allow\_origins) | List of origins allowed to make cross-origin requests (CORS). Use ['*'] to allow all origins. Default to no CORS headers. | `list(string)` | `null` | no |
 | <a name="input_cpu"></a> [cpu](#input\_cpu) | ECS task CPU count. Valid values: 0.25, 0.5, 1, 2, 4, 8 & 16. Default of 0.25 vCPU is suitable for common use cases (text generation, embeddings). Increase for intensive workloads (multimodal requests, large LLM models). | `number` | `0.25` | no |
 | <a name="input_cpu_architecture"></a> [cpu\_architecture](#input\_cpu\_architecture) | CPU architecture. Valid values: 'X86\_64' or 'ARM64'. | `string` | `"ARM64"` | no |
@@ -339,6 +472,7 @@ For integration patterns against existing infrastructure (BYO VPC, ALB, Route53 
 | <a name="input_enable_openapi_json"></a> [enable\_openapi\_json](#input\_enable\_openapi\_json) | Enable OpenAPI JSON schema endpoint at /openapi.json. Default to false. | `bool` | `null` | no |
 | <a name="input_enable_proxy_headers"></a> [enable\_proxy\_headers](#input\_enable\_proxy\_headers) | Enable ProxyHeadersMiddleware to trust X-Forwarded-* headers from reverse proxies. Automatically enabled when var.alb\_enabled is true and var.log\_client\_ip is true. | `bool` | `null` | no |
 | <a name="input_enable_redoc"></a> [enable\_redoc](#input\_enable\_redoc) | Enable ReDoc API documentation UI at /redoc. Default to false. | `bool` | `null` | no |
+| <a name="input_guardduty_vpc_endpoint_enabled"></a> [guardduty\_vpc\_endpoint\_enabled](#input\_guardduty\_vpc\_endpoint\_enabled) | If true, add the interface VPC endpoint required by GuardDuty Runtime Monitoring. Only relevant if you use GuardDuty Runtime Monitoring on resources in this VPC — leave false otherwise. Recommended whenever Runtime Monitoring is enabled, even with GuardDuty's automated agent configuration, since managing it here ensures correct subnet placement. Not mapped to a Security Hub control; default false = endpoint not created. | `bool` | `false` | no |
 | <a name="input_image_generation_model"></a> [image\_generation\_model](#input\_image\_generation\_model) | Default model ID for image generation (e.g. 'amazon.nova-canvas-v1:0'). Required unless the client or the LLM specifies a model per call. | `string` | `null` | no |
 | <a name="input_kms_key_id"></a> [kms\_key\_id](#input\_kms\_key\_id) | If specified, directly use this KMS key instead of creating a dedicated one for the application. | `string` | `null` | no |
 | <a name="input_log_client_ip"></a> [log\_client\_ip](#input\_log\_client\_ip) | If True, log the client IP address for each request and add it to OpenTelemetry spans. Default to false. | `bool` | `null` | no |

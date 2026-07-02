@@ -169,3 +169,19 @@ resource "aws_s3_bucket_policy" "main" {
   bucket = aws_s3_bucket.main[0].id
   policy = data.aws_iam_policy_document.main_bucket_policy[0].json
 }
+
+# Server access logging to the shared logs bucket (alb.tf). S3 access log destinations must be in
+# the same Region as the source bucket, so this only covers the main bucket, not the regional ones.
+resource "aws_s3_bucket_logging" "main" {
+  count         = local.create_s3_bucket ? 1 : 0
+  bucket        = aws_s3_bucket.main[0].id
+  target_bucket = aws_s3_bucket.logs[0].id
+  target_prefix = "s3-access-logs/main/"
+}
+
+# Zero-config EventBridge notifications — no targets/rules required for this to satisfy compliance.
+resource "aws_s3_bucket_notification" "main" {
+  count       = local.create_s3_bucket ? 1 : 0
+  bucket      = aws_s3_bucket.main[0].id
+  eventbridge = true
+}

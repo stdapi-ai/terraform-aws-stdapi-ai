@@ -640,6 +640,18 @@ variable "vpc_flow_log_enabled" {
   default     = true
 }
 
+variable "compliance_vpc_endpoints_enabled" {
+  description = "If true, add the interface VPC endpoints for ECR API, ECR Docker Registry, Systems Manager, SSM Incident Manager Contacts and SSM Incident Manager. Enable only if you have high compliance requirements — each interface endpoint adds cost. Security Hub: EC2.55/EC2.56/EC2.57/EC2.58/EC2.60 — default false = fail; set to true to pass."
+  type        = bool
+  default     = false
+}
+
+variable "guardduty_vpc_endpoint_enabled" {
+  description = "If true, add the interface VPC endpoint required by GuardDuty Runtime Monitoring. Only relevant if you use GuardDuty Runtime Monitoring on resources in this VPC — leave false otherwise. Recommended whenever Runtime Monitoring is enabled, even with GuardDuty's automated agent configuration, since managing it here ensures correct subnet placement. Not mapped to a Security Hub control; default false = endpoint not created."
+  type        = bool
+  default     = false
+}
+
 # ECS Container Configuration
 
 variable "cpu" {
@@ -852,6 +864,12 @@ variable "alb_waf_logging_enabled" {
   default     = true
 }
 
+variable "alb_access_logging_enabled" {
+  description = "If true, enable ALB access logging to a dedicated S3 bucket. Security Hub: ELB.5 (Application Load Balancers should have logging enabled) — default true = pass; only relevant when var.alb_enabled is true."
+  type        = bool
+  default     = true
+}
+
 variable "alb_ssl_policy" {
   description = "SSL/TLS security policy for the ALB HTTPS listener. Defaults to the AWS-recommended post-quantum policy. See https://docs.aws.amazon.com/elasticloadbalancing/latest/application/describe-ssl-policies.html"
   type        = string
@@ -861,13 +879,13 @@ variable "alb_ssl_policy" {
 # Logging and Monitoring
 
 variable "cloudwatch_logs_retention_in_days" {
-  description = "Cloudwatch logs retention in days."
+  description = "Cloudwatch logs retention in days. Applies to every log group this module and its child modules create, including the Container Insights performance log group. Security Hub: CloudWatch.16 (CloudWatch log groups should be retained for a specified time period) requires at least 365 days by default — default 365 = pass; lowering it fails this control."
   type        = number
   default     = 365
 }
 
 variable "container_insight" {
-  description = "Container insight configuration. Valid values: 'enhanced', 'enabled', 'disabled'. Default to 'enabled'."
+  description = "Container insight configuration. Valid values: 'enhanced', 'enabled', 'disabled'. Default to 'enabled'. Security Hub: ECS.12 (ECS clusters should use Container Insights) — default 'enabled' = pass; setting 'disabled' fails this control."
   type        = string
   default     = "enabled"
   validation {

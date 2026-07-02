@@ -126,3 +126,124 @@ resource "aws_s3_bucket_policy" "regional" {
   bucket   = each.value.id
   policy   = data.aws_iam_policy_document.regional_bucket_policy[each.key].json
 }
+
+# Zero-config EventBridge notifications — no targets/rules required for this to satisfy compliance.
+resource "aws_s3_bucket_notification" "regional" {
+  for_each    = aws_s3_bucket.regional
+  region      = each.key
+  bucket      = each.value.id
+  eventbridge = true
+}
+
+# Per-Region log bucket for regional bucket server access logs: S3 access log destinations must be
+# in the same Region as their source bucket, so the shared logs bucket (alb.tf) can't be reused here
+# — mirrors the per-Region regional_kms pattern above.
+resource "aws_s3_bucket" "regional_logs" {
+  for_each      = aws_s3_bucket.regional
+  region        = each.key
+  bucket        = "${local.regional_bucket_names[each.key]}-logs"
+  force_destroy = !var.deletion_protection
+  tags          = merge(local.apn_tags, { Name = "${local.regional_bucket_names[each.key]}-logs" })
+}
+
+resource "aws_s3_bucket_public_access_block" "regional_logs" {
+  for_each                = aws_s3_bucket.regional_logs
+  region                  = each.key
+  bucket                  = each.value.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+# S3 access log delivery only supports SSE-S3 (not SSE-KMS), same constraint as the shared logs bucket.
+resource "aws_s3_bucket_server_side_encryption_configuration" "regional_logs" {
+  for_each = aws_s3_bucket.regional_logs
+  region   = each.key
+  bucket   = each.value.id
+  rule {
+    bucket_key_enabled = true
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+resource "aws_s3_bucket_versioning" "regional_logs" {
+  for_each = aws_s3_bucket.regional_logs
+  region   = each.key
+  bucket   = each.value.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "regional_logs" {
+  for_each   = aws_s3_bucket.regional_logs
+  region     = each.key
+  bucket     = each.value.id
+  depends_on = [aws_s3_bucket_versioning.regional_logs]
+
+  rule {
+    id     = "expire-old-logs"
+    status = "Enabled"
+    filter {}
+    expiration {
+      days = var.cloudwatch_logs_retention_in_days
+    }
+  }
+}
+
+data "aws_iam_policy_document" "regional_logs" {
+  for_each = aws_s3_bucket.regional_logs
+  statement {
+    sid    = "S3ServerAccessLogsPolicy"
+    effect = "Allow"
+    principals {
+      type        = "Service"
+      identifiers = ["logging.s3.amazonaws.com"]
+    }
+    actions   = ["s3:PutObject"]
+    resources = ["${each.value.arn}/s3-access-logs/*"]
+    condition {
+      test     = "StringEquals"
+      variable = "aws:SourceAccount"
+      values   = [data.aws_caller_identity.current.account_id]
+    }
+    condition {
+      test     = "ArnLike"
+      variable = "aws:SourceArn"
+      values   = [aws_s3_bucket.regional[each.key].arn]
+    }
+  }
+  statement {
+    sid    = "EnforceTLS"
+    effect = "Deny"
+    principals {
+      type        = "AWS"
+      identifiers = ["*"]
+    }
+    actions   = ["s3:*"]
+    resources = [each.value.arn, "${each.value.arn}/*"]
+    condition {
+      test     = "Bool"
+      variable = "aws:SecureTransport"
+      values   = ["false"]
+    }
+  }
+}
+
+resource "aws_s3_bucket_policy" "regional_logs" {
+  for_each = aws_s3_bucket.regional_logs
+  region   = each.key
+  bucket   = each.value.id
+  policy   = data.aws_iam_policy_document.regional_logs[each.key].json
+}
+
+resource "aws_s3_bucket_logging" "regional" {
+  for_each      = aws_s3_bucket.regional
+  region        = each.key
+  bucket        = each.value.id
+  target_bucket = aws_s3_bucket.regional_logs[each.key].id
+  target_prefix = "s3-access-logs/"
+}

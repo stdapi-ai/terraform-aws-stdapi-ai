@@ -145,6 +145,9 @@ module "server" {
         start_period = 30
       }
       read_only_root_filesystem = true
+      # Matches the Chainguard python base image's default non-root user (nonroot, uid/gid 65532),
+      # declared explicitly since Security Hub ECS.20 checks the task definition, not the image.
+      user = "65532:65532"
       linux_parameters = {
         capabilities = { drop = ["ALL"] }
       }

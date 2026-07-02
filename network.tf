@@ -58,19 +58,21 @@ module "vpc" {
   source  = "JGoutin/vpc/aws"
   version = "~> 1.1"
 
-  name_prefix                 = local.name
-  tags                        = local.apn_tags
-  internet_access_allowed     = local.internet_access_required
-  nat_gateways_allowed        = var.nat_gateways_allowed
-  vpc_endpoints_allowed       = var.vpc_endpoints_allowed
-  availability_zones_count    = var.availability_zones_count
-  subnets_ids                 = var.subnet_ids
-  security_group_id           = var.security_group_id
-  vpc_cidr                    = var.vpc_cidr
-  vpc_flow_log_enabled        = var.vpc_flow_log_enabled
-  vpc_flow_log_retention_days = var.cloudwatch_logs_retention_in_days
-  kms_key_id                  = module.kms_key.id
-  kms_policy_dependency       = module.kms_key.policy_dependency
+  name_prefix                      = local.name
+  tags                             = local.apn_tags
+  internet_access_allowed          = local.internet_access_required
+  nat_gateways_allowed             = var.nat_gateways_allowed
+  vpc_endpoints_allowed            = var.vpc_endpoints_allowed
+  compliance_vpc_endpoints_enabled = var.compliance_vpc_endpoints_enabled
+  guardduty_vpc_endpoint_enabled   = var.guardduty_vpc_endpoint_enabled
+  availability_zones_count         = var.availability_zones_count
+  subnets_ids                      = var.subnet_ids
+  security_group_id                = var.security_group_id
+  vpc_cidr                         = var.vpc_cidr
+  vpc_flow_log_enabled             = var.vpc_flow_log_enabled
+  vpc_flow_log_retention_days      = var.cloudwatch_logs_retention_in_days
+  kms_key_id                       = module.kms_key.id
+  kms_policy_dependency            = module.kms_key.policy_dependency
   vpc_endpoints_services = concat(
     local.vpc_endpoints_core,
     local.ecs_service ? ["ecr.dkr", "ecr.api", "metering-marketplace"] : [],
