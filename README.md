@@ -1,5 +1,8 @@
 # stdapi.ai - Terraform Module for AWS
 
+[![Terraform Module](https://img.shields.io/badge/Terraform-Enterprise%20Edition%20module-844FBA?logo=terraform&logoColor=ffffff)](https://registry.terraform.io/modules/stdapi-ai/stdapi-ai/aws/latest)
+[![OpenTofu Module](https://img.shields.io/badge/OpenTofu-Enterprise%20Edition%20module-FFDA18?logo=opentofu&logoColor=ffffff)](https://search.opentofu.org/module/stdapi-ai/stdapi-ai/aws/latest)
+
 **Deploy an OpenAI & Anthropic compatible AI gateway on AWS in minutes.** Production-ready ECS Fargate infrastructure with HTTPS, WAF, auto-scaling, and monitoring — all from a single Terraform module.
 
 🌐 [Documentation](https://stdapi.ai) · 🚀 [Start 14-Day Free Trial](https://stdapi.ai/operations_getting_started/) · 💻 [GitHub Repository](https://github.com/stdapi-ai/stdapi.ai)
