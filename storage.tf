@@ -72,9 +72,30 @@ resource "aws_s3_bucket_lifecycle_configuration" "main" {
     }
   }
 
-  # Expire Files API objects that were uploaded with expires_after (tagged expires=true).
+  # Expire Files API objects tagged stdapi-ai.expires=true (current tag key).
   rule {
     id     = "stdapi-files-expiration"
+    status = "Enabled"
+    filter {
+      and {
+        prefix = local.s3_files_prefix
+        tags = {
+          "stdapi-ai.expires" = "true"
+        }
+      }
+    }
+    expiration {
+      days = 30
+    }
+    noncurrent_version_expiration {
+      noncurrent_days = 1
+    }
+  }
+
+  # Backward-compatibility rule for objects tagged with the old expires=true key.
+  # Can be removed 30+ days after the stdapi-ai.expires rename is deployed.
+  rule {
+    id     = "stdapi-files-expiration-legacy"
     status = "Enabled"
     filter {
       and {
