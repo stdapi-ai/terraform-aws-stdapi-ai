@@ -652,6 +652,50 @@ variable "guardduty_vpc_endpoint_enabled" {
   default     = false
 }
 
+variable "dns_firewall_enabled" {
+  description = "If true, create a Route 53 Resolver DNS Firewall rule group and associate it with the dedicated VPC, blocking/alerting on DNS queries per var.dns_firewall_managed_domain_list_ids and var.dns_firewall_advanced_enabled. Helps mitigate malicious-URL injection via user-supplied URL/file references (images, documents, audio) by blocking outbound DNS resolution to known-malicious domains, in addition to the application's own SSRF protection. Only supported for the dedicated VPC this module creates; cannot be enabled when using external subnets (var.subnet_ids). Not mapped to a Security Hub control; default false = feature not created."
+  type        = bool
+  default     = false
+}
+
+variable "dns_firewall_managed_domain_list_ids" {
+  description = "Map of AWS Managed Domain List name to ID (e.g. { \"AWSManagedDomainsAggregateThreatList\" = \"rslvr-fdl-...\" }) to block/alert on via var.dns_firewall_action. Defaults (null) to the Aggregate Threat List ID built into the underlying VPC module for the current region, covering commercial regions enabled by default — no AWS CLI call or extra permissions required. For a region not covered by that default, look up the ID with 'aws route53resolver list-firewall-domain-lists' and pass it explicitly. Ignored if var.dns_firewall_enabled is false. Set to {} to skip managed-list rules while still using var.dns_firewall_advanced_enabled."
+  type        = map(string)
+  default     = null
+}
+
+variable "dns_firewall_action" {
+  description = "Action taken by DNS Firewall when a query matches a domain from var.dns_firewall_managed_domain_list_ids, and (if var.dns_firewall_advanced_enabled) a DNS Firewall Advanced threat detection. Valid values: 'ALLOW', 'BLOCK', 'ALERT'. 'ALLOW' isn't valid for DNS Firewall Advanced rules, so it's treated as 'BLOCK' for those only. Ignored if var.dns_firewall_enabled is false."
+  type        = string
+  default     = "BLOCK"
+  validation {
+    condition     = contains(["ALLOW", "BLOCK", "ALERT"], var.dns_firewall_action)
+    error_message = "dns_firewall_action must be one of: ALLOW, BLOCK, ALERT."
+  }
+}
+
+variable "dns_firewall_advanced_enabled" {
+  description = "If true, add Route 53 Resolver DNS Firewall Advanced rules (additional cost) blocking DNS queries identified as domain generation algorithm (DGA) or DNS tunneling activity, on top of any managed-domain-list rules. Ignored if var.dns_firewall_enabled is false."
+  type        = bool
+  default     = false
+}
+
+variable "dns_firewall_advanced_confidence_threshold" {
+  description = "Confidence threshold for DNS Firewall Advanced rules. Valid values: 'LOW', 'MEDIUM', 'HIGH'. Lower thresholds catch more threats at the cost of more false positives. Ignored if var.dns_firewall_advanced_enabled is false."
+  type        = string
+  default     = "HIGH"
+  validation {
+    condition     = contains(["LOW", "MEDIUM", "HIGH"], var.dns_firewall_advanced_confidence_threshold)
+    error_message = "dns_firewall_advanced_confidence_threshold must be one of: LOW, MEDIUM, HIGH."
+  }
+}
+
+variable "dns_firewall_priority" {
+  description = "Processing priority for the DNS Firewall rule group association within the VPC (lower is processed first). Must be unique among all rule group associations on the same VPC, including ones created outside this module. Ignored if var.dns_firewall_enabled is false."
+  type        = number
+  default     = 101
+}
+
 # ECS Container Configuration
 
 variable "cpu" {
