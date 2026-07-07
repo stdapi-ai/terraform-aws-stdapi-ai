@@ -191,7 +191,7 @@ Severity: 🔴 Critical · 🟠 High · 🟡 Medium · 🔵 Low
 
 | Control | Severity | Title | Status | Notes |
 |---|---|---|---|---|
-| KMS.1 / KMS.2 | 🟡 Medium | IAM policies/inline policies should not allow decryption on all KMS keys | ⬜ N/A | No IAM policies are created by the KMS module. |
+| KMS.1 / KMS.2 | 🟡 Medium | IAM policies/inline policies should not allow decryption on all KMS keys | ✅ Pass | The application is only ever allowed to decrypt data using the specific encryption keys this deployment creates or is given — never every key in the account. |
 | KMS.3 | 🔴 Critical | KMS keys should not be deleted unintentionally | ✅ Pass | No `deletion_window_in_days` override — AWS's 30-day maximum applies. |
 | KMS.4 | 🟡 Medium | KMS key rotation should be enabled | ✅ Pass | Hardcoded in the KMS module for every key it creates, including the regional ones. |
 | KMS.5 | 🔴 Critical | KMS keys should not be publicly accessible | ✅ Pass | Every statement merged into `policy_documents_json` (this module's log policy, plus `module.vpc.kms_policy_documents_json` and `module.server.kms_policy_documents_json`) scopes a specific AWS service principal with an `ArnLike`/`StringEquals` condition — none is a wildcard principal. The regional keys use the KMS module's safe root-only default. |
