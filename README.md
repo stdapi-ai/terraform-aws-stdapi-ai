@@ -149,6 +149,16 @@ For integration patterns against existing infrastructure (BYO VPC, ALB, Route53 
 | **[Use Cases](https://stdapi.ai/use_cases/)** | Open WebUI, n8n, coding assistants, and more |
 | **[Features](https://stdapi.ai/features/)** | Full product capabilities |
 
+## AWS Qualified Software
+
+<div align="center">
+<a href="https://aws.amazon.com/marketplace/pp/prodview-su2dajk5zawpo">
+<img src="https://stdapi.ai/styles/aws_qualified_software_badge_light.png" alt="AWS Qualified Software badge" width="120" />
+</a>
+
+stdapi.ai is an **AWS Qualified Software** solution, verified against AWS technical and security requirements for AWS Marketplace.
+</div>
+
 ## Technical Requirements
 
 - **AWS Marketplace Subscription** — [Subscribe here](https://aws.amazon.com/marketplace/pp/prodview-su2dajk5zawpo) (14-day free trial included)
