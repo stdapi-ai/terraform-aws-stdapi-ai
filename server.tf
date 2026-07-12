@@ -47,37 +47,44 @@ module "server" {
       image = local.container_image
       environment = merge(
         { for k, v in {
-          AWS_S3_BUCKET                      = local.s3_bucket_name
-          AWS_POLLY_REGION                   = var.aws_polly_region
-          AWS_COMPREHEND_REGION              = var.aws_comprehend_region
-          AWS_BEDROCK_REGIONS                = var.aws_bedrock_regions != null ? join(",", var.aws_bedrock_regions) : null
-          AWS_BEDROCK_GUARDRAIL_IDENTIFIER   = var.aws_bedrock_guardrail_identifier
-          AWS_BEDROCK_GUARDRAIL_VERSION      = var.aws_bedrock_guardrail_version
-          AWS_BEDROCK_GUARDRAIL_TRACE        = var.aws_bedrock_guardrail_trace
-          AWS_TRANSCRIBE_REGION              = var.aws_transcribe_region
-          AWS_TRANSCRIBE_S3_BUCKET           = var.aws_transcribe_s3_bucket
-          AWS_S3_TMP_PREFIX                  = var.aws_s3_tmp_prefix
-          AWS_S3_FILES_PREFIX                = var.aws_s3_files_prefix
-          AWS_TRANSLATE_REGION               = var.aws_translate_region
-          TIMEZONE                           = var.timezone
-          OPENAI_ROUTES_PREFIX               = var.openai_routes_prefix
-          ANTHROPIC_ROUTES_PREFIX            = var.anthropic_routes_prefix
-          API_KEY_SSM_PARAMETER              = var.api_key_ssm_parameter
-          API_KEY_SECRETSMANAGER_SECRET      = var.api_key_secretsmanager_secret
-          API_KEY_SECRETSMANAGER_KEY         = var.api_key_secretsmanager_key
-          OTEL_SERVICE_NAME                  = var.otel_service_name
-          OTEL_EXPORTER_ENDPOINT             = var.otel_exporter_endpoint
-          LOG_LEVEL                          = var.log_level
-          DEFAULT_MODEL_PARAMS               = var.default_model_params
-          DEFAULT_MODEL_SERVICE_TIERS        = var.default_model_service_tiers
-          DEFAULT_TTS_MODEL                  = var.default_tts_model
-          DEFAULT_TTS_LANGUAGE               = var.default_tts_language
-          TOKENS_ESTIMATION_DEFAULT_ENCODING = var.tokens_estimation_default_encoding
-          ANTHROPIC_BETA_ALLOWLIST           = var.anthropic_beta_allowlist
-          MCP_INCLUDE_TOOLS                  = var.mcp_include_tools
-          MCP_EXCLUDE_TOOLS                  = var.mcp_exclude_tools
-          AWS_BEDROCK_REGION_ROUTING         = var.aws_bedrock_region_routing
-          IMAGE_GENERATION_MODEL             = var.image_generation_model
+          AWS_S3_BUCKET                          = local.s3_bucket_name
+          AWS_POLLY_REGION                       = var.aws_polly_region
+          AWS_COMPREHEND_REGION                  = var.aws_comprehend_region
+          AWS_BEDROCK_REGIONS                    = var.aws_bedrock_regions != null ? join(",", var.aws_bedrock_regions) : null
+          AWS_BEDROCK_MANTLE_REGIONS             = var.aws_bedrock_mantle_regions != null ? join(",", var.aws_bedrock_mantle_regions) : null
+          AWS_BEDROCK_MANTLE_PREFERRED_MODELS    = var.aws_bedrock_mantle_preferred_models != null ? join(",", var.aws_bedrock_mantle_preferred_models) : null
+          AWS_BEDROCK_MANTLE_PROJECT             = var.aws_bedrock_mantle_project
+          AWS_BEDROCK_GUARDRAIL_IDENTIFIER       = var.aws_bedrock_guardrail_identifier
+          AWS_BEDROCK_GUARDRAIL_VERSION          = var.aws_bedrock_guardrail_version
+          AWS_BEDROCK_GUARDRAIL_TRACE            = var.aws_bedrock_guardrail_trace
+          AWS_BEDROCK_SESSION_ENCRYPTION_KEY_ARN = var.aws_bedrock_session_encryption_key_arn
+          AWS_TRANSCRIBE_REGION                  = var.aws_transcribe_region
+          AWS_TRANSCRIBE_S3_BUCKET               = var.aws_transcribe_s3_bucket
+          AWS_S3_TMP_PREFIX                      = var.aws_s3_tmp_prefix
+          AWS_S3_FILES_PREFIX                    = var.aws_s3_files_prefix
+          AWS_S3_VIDEOS_PREFIX                   = var.aws_s3_videos_prefix
+          AWS_TRANSLATE_REGION                   = var.aws_translate_region
+          TIMEZONE                               = var.timezone
+          OPENAI_ROUTES_PREFIX                   = var.openai_routes_prefix
+          ANTHROPIC_ROUTES_PREFIX                = var.anthropic_routes_prefix
+          COHERE_ROUTES_PREFIX                   = var.cohere_routes_prefix
+          API_KEY_SSM_PARAMETER                  = var.api_key_ssm_parameter
+          API_KEY_SECRETSMANAGER_SECRET          = var.api_key_secretsmanager_secret
+          API_KEY_SECRETSMANAGER_KEY             = var.api_key_secretsmanager_key
+          OTEL_SERVICE_NAME                      = var.otel_service_name
+          OTEL_EXPORTER_ENDPOINT                 = var.otel_exporter_endpoint
+          LOG_LEVEL                              = var.log_level
+          DEFAULT_MODEL_PARAMS                   = var.default_model_params
+          DEFAULT_MODEL_SERVICE_TIERS            = var.default_model_service_tiers
+          DEFAULT_TTS_MODEL                      = var.default_tts_model
+          DEFAULT_TTS_LANGUAGE                   = var.default_tts_language
+          TOKENS_ESTIMATION_DEFAULT_ENCODING     = var.tokens_estimation_default_encoding
+          CLOUDWATCH_METRICS_NAMESPACE           = var.cloudwatch_metrics_namespace
+          ANTHROPIC_BETA_ALLOWLIST               = var.anthropic_beta_allowlist
+          MCP_INCLUDE_TOOLS                      = var.mcp_include_tools
+          MCP_EXCLUDE_TOOLS                      = var.mcp_exclude_tools
+          AWS_BEDROCK_REGION_ROUTING             = var.aws_bedrock_region_routing
+          IMAGE_GENERATION_MODEL                 = var.image_generation_model
         } : k => v if v != null },
         { for k, v in {
           ENABLE_MCP_STREAMABLE_HTTP                             = var.enable_mcp_streamable_http
@@ -114,8 +121,17 @@ module "server" {
           AWS_BEDROCK_REGION_ROUTING_MAX_QUOTA_BACKOFF_SECONDS   = var.aws_bedrock_region_routing_max_quota_backoff_seconds
           AWS_BEDROCK_REGION_ROUTING_QUOTA_STALE_FACTOR          = var.aws_bedrock_region_routing_quota_stale_factor
           AWS_BEDROCK_MAX_RETRIES                                = var.aws_bedrock_max_retries
+          AWS_FAILOVER_MAX_RETRIES                               = var.aws_failover_max_retries
           AI_RESPONSE_TIMEOUT                                    = var.ai_response_timeout
           AWS_BEDROCK_DEPRECATED_MODEL_FALLBACK                  = var.aws_bedrock_deprecated_model_fallback
+          AWS_S3_VIDEOS_EXPIRES_AFTER                            = var.aws_s3_videos_expires_after
+          CLOUDWATCH_METRICS                                     = var.cloudwatch_metrics
+          COST_TRACKING                                          = var.cost_tracking
+          AWS_BEDROCK_MANTLE_ENABLED                             = var.aws_bedrock_mantle_enabled
+          AWS_BEDROCK_MANTLE_SERVICE_HEADER                      = var.aws_bedrock_mantle_service_header
+          AWS_BEDROCK_ALLOW_MANTLE_PROJECT_OVERRIDE              = var.aws_bedrock_allow_mantle_project_override
+          MAX_INPUT_FILE_SIZE                                    = var.max_input_file_size
+          MAX_CONCURRENT_INPUT_DOWNLOADS                         = var.max_concurrent_input_downloads
         } : k => tostring(v) if v != null },
         { for k, v in {
           AWS_S3_REGIONAL_BUCKETS           = local.regional_buckets_combined
@@ -126,6 +142,8 @@ module "server" {
           AWS_S3_ACCEPTED_BUCKETS           = var.aws_s3_accepted_buckets
           AWS_BEDROCK_MODEL_REGION_RESTRICT = var.aws_bedrock_model_region_restrict
           AWS_BEDROCK_DEPRECATED_MODELS     = var.aws_bedrock_deprecated_models
+          COST_PRICE_OVERRIDES              = var.cost_price_overrides
+          PROXY_TRUSTED_HOSTS               = var.proxy_trusted_hosts != null ? var.proxy_trusted_hosts : ((var.alb_enabled && var.log_client_ip == true) ? local.alb_subnets_cidr_blocks : null)
         } : k => jsonencode(v) if v != null }
       )
       secrets = var.api_key != null || var.api_key_create ? {
@@ -185,15 +203,94 @@ data "aws_iam_policy_document" "server" {
       "bedrock:InvokeModel",
       "bedrock:InvokeModelWithResponseStream",
       "bedrock:InvokeTool",
+      "bedrock:ListAsyncInvokes",
+      "bedrock:Rerank",
+      "bedrock:StartAsyncInvoke",
     ]
     resources = ["*"]
   }
 
   # Bedrock - Async Invoke Tagging (Always Required)
   statement {
-    sid       = "BedrockAsyncInvokeTagging"
-    actions   = ["bedrock:TagResource"]
+    sid = "BedrockAsyncInvokeTagging"
+    actions = [
+      "bedrock:ListTagsForResource",
+      "bedrock:TagResource",
+    ]
     resources = ["arn:aws:bedrock:*:${data.aws_caller_identity.current.account_id}:async-invoke/*"]
+  }
+
+  # Bedrock - Session Storage for stored responses & chat completions (Always Required)
+  statement {
+    sid = "BedrockSessionStorage"
+    actions = [
+      "bedrock:CreateSession",
+      "bedrock:CreateInvocation",
+      "bedrock:PutInvocationStep",
+      "bedrock:ListInvocations",
+      "bedrock:ListInvocationSteps",
+      "bedrock:GetInvocationStep",
+      "bedrock:GetSession",
+      "bedrock:EndSession",
+      "bedrock:DeleteSession",
+      "bedrock:TagResource",
+      "bedrock:ListTagsForResource",
+    ]
+    resources = ["arn:aws:bedrock:*:${data.aws_caller_identity.current.account_id}:session/*"]
+  }
+
+  # Bedrock - Session Listing for stored responses & chat completions (Always Required)
+  statement {
+    sid       = "BedrockSessionListing"
+    actions   = ["bedrock:ListSessions"]
+    resources = ["*"]
+  }
+
+  # Bedrock Mantle - Model Serving (Always Required; enabled by default, see aws_bedrock_mantle_enabled)
+  statement {
+    sid = "BedrockMantleInference"
+    actions = [
+      "bedrock-mantle:CreateInference",
+      "bedrock-mantle:GetInference",
+      "bedrock-mantle:DeleteInference",
+      "bedrock-mantle:ListModels",
+      "bedrock-mantle:GetModel",
+      "bedrock-mantle:CountTokens",
+      "bedrock-mantle:CancelInference",
+    ]
+    resources = ["arn:aws:bedrock-mantle:*:${data.aws_caller_identity.current.account_id}:project/*"]
+  }
+
+  # Bedrock Mantle - Bearer Token Authentication (Always Required)
+  statement {
+    sid       = "BedrockMantleBearerToken"
+    actions   = ["bedrock-mantle:CallWithBearerToken"]
+    resources = ["*"]
+  }
+
+  # Bedrock - Session Storage KMS encryption (Optional)
+  dynamic "statement" {
+    for_each = var.aws_bedrock_session_encryption_key_arn != null ? [1] : []
+    content {
+      sid = "BedrockSessionStorageKms"
+      actions = [
+        "kms:CreateGrant",
+        "kms:Decrypt",
+        "kms:DescribeKey",
+        "kms:GenerateDataKey",
+      ]
+      resources = [var.aws_bedrock_session_encryption_key_arn]
+    }
+  }
+
+  # Pricing - Cost Tracking (Optional)
+  dynamic "statement" {
+    for_each = var.cost_tracking == true ? [1] : []
+    content {
+      sid       = "PricingCostTracking"
+      actions   = ["pricing:GetProducts"]
+      resources = ["*"]
+    }
   }
 
   # Bedrock - Inference Profiles & Prompt Routers (Optional)
@@ -234,14 +331,13 @@ data "aws_iam_policy_document" "server" {
     }
   }
 
-  # Bedrock - Guardrails (Optional)
-  dynamic "statement" {
-    for_each = var.aws_bedrock_guardrail_identifier != null ? [1] : []
-    content {
-      sid       = "BedrockGuardrails"
-      actions   = ["bedrock:ApplyGuardrail"]
-      resources = ["arn:aws:bedrock:*:*:guardrail/*"]
-    }
+  # Bedrock - Guardrails (Always Required)
+  # Needed beyond var.aws_bedrock_guardrail_identifier: the Moderations API
+  # applies any guardrail named in the request, with no server-side setting.
+  statement {
+    sid       = "BedrockGuardrails"
+    actions   = ["bedrock:ApplyGuardrail"]
+    resources = ["arn:aws:bedrock:*:*:guardrail/*"]
   }
 
   # S3 - File Storage (Optional)
@@ -423,10 +519,13 @@ data "aws_iam_policy_document" "server" {
     }
   }
 
-  # Comprehend - Language Detection (Always Enabled)
+  # Comprehend - Language Detection & Content Moderation (Always Enabled)
   statement {
-    sid       = "ComprehendLanguageDetection"
-    actions   = ["comprehend:DetectDominantLanguage"]
+    sid = "Comprehend"
+    actions = [
+      "comprehend:DetectDominantLanguage",
+      "comprehend:DetectToxicContent",
+    ]
     resources = ["*"]
   }
 

@@ -6,6 +6,14 @@ locals {
   # Use public subnets if ALB is public, otherwise use app subnets
   alb_subnets = var.alb_enabled && var.alb_public ? module.vpc.public_subnets_ids : module.vpc.subnets_ids
 
+  # CIDR blocks (IPv4 + IPv6) of the subnets the ALB nodes live in; used to trust
+  # only the ALB as the X-Forwarded-* peer when proxy headers are auto-enabled.
+  alb_subnets_cidr_blocks = var.alb_public ? concat(
+    module.vpc.public_subnets_cidr_blocks, module.vpc.public_subnets_ipv6_cidr_blocks
+    ) : concat(
+    module.vpc.subnets_cidr_blocks, module.vpc.subnets_ipv6_cidr_blocks
+  )
+
   # Shared logs bucket needed for ALB access logs and/or the main S3 bucket's server access logs.
   # Regional S3 buckets (storage_regional.tf) can't log here: S3 access log destinations must be in
   # the same Region as the source bucket, and this bucket isn't Region-pinned (it lives in the

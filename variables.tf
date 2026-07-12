@@ -116,13 +116,13 @@ variable "aws_s3_accelerate" {
 }
 
 variable "aws_polly_region" {
-  description = "AWS region for Polly text-to-speech service. Default to first var.aws_bedrock_regions region or the current region."
+  description = "AWS region for Polly text-to-speech service. Default to every var.aws_bedrock_regions region as a failover candidate, or the current region."
   type        = string
   default     = null
 }
 
 variable "aws_comprehend_region" {
-  description = "AWS region for Comprehend language detection service. Default to first var.aws_bedrock_regions region or the current region."
+  description = "AWS region for Comprehend language detection service. Default to every var.aws_bedrock_regions region as a failover candidate, or the current region."
   type        = string
   default     = null
 }
@@ -130,6 +130,42 @@ variable "aws_comprehend_region" {
 variable "aws_bedrock_regions" {
   description = "List of AWS regions where Bedrock AI models are available. Default to the current region."
   type        = list(string)
+  default     = null
+}
+
+variable "aws_bedrock_mantle_enabled" {
+  description = "If true (application default), expose models served by the Amazon Bedrock Mantle endpoint (OpenAI GPT, xAI Grok, Google Gemma, and more) in addition to the classic Bedrock Converse models. Set to false to disable Mantle. When enabled but Mantle is unreachable or the region lacks the service, Mantle models are simply not listed."
+  type        = bool
+  default     = null
+}
+
+variable "aws_bedrock_mantle_regions" {
+  description = "List of AWS regions used for Amazon Bedrock Mantle, in failover priority order. Default to var.aws_bedrock_regions."
+  type        = list(string)
+  default     = null
+}
+
+variable "aws_bedrock_mantle_preferred_models" {
+  description = "Model IDs (or ID prefixes) served by Amazon Bedrock Mantle even when also available on the classic bedrock-runtime endpoint. Default to none (bedrock-runtime preferred)."
+  type        = list(string)
+  default     = null
+}
+
+variable "aws_bedrock_mantle_service_header" {
+  description = "If true, honor the 'x-stdapi-service: bedrock-mantle' request header to route a dual-homed model through Bedrock Mantle for that request. Cannot be combined with Bedrock Guardrails. Default to false."
+  type        = bool
+  default     = null
+}
+
+variable "aws_bedrock_mantle_project" {
+  description = "Default Amazon Bedrock Mantle project (workspace) ID used to attribute Mantle inference requests for cost tracking and observability. A bare project ID such as 'proj_abc123' or 'default' (not an ARN). Default to none."
+  type        = string
+  default     = null
+}
+
+variable "aws_bedrock_allow_mantle_project_override" {
+  description = "If true, allow clients to override the configured Amazon Bedrock Mantle project per request via the 'OpenAI-Project' / 'anthropic-workspace' header. Default to false."
+  type        = bool
   default     = null
 }
 
@@ -171,6 +207,16 @@ variable "aws_bedrock_max_retries" {
   description = "Maximum number of retries for Bedrock invocations. When region routing is enabled, retries cycle through all available regions. Default to 9."
   type        = number
   default     = null
+}
+
+variable "aws_failover_max_retries" {
+  description = "Maximum SDK retry attempts per candidate region for the multi-region failover services (Polly, Transcribe, Translate, Comprehend). Only applied when the service has several candidate regions (no dedicated region setting configured). Default to 2."
+  type        = number
+  default     = null
+  validation {
+    condition     = var.aws_failover_max_retries == null || var.aws_failover_max_retries >= 0
+    error_message = "Must be greater than or equal to 0."
+  }
 }
 
 variable "aws_s3_accepted_buckets" {
@@ -272,7 +318,7 @@ variable "aws_bedrock_guardrail_trace" {
 }
 
 variable "aws_transcribe_region" {
-  description = "AWS region for Transcribe speech-to-text service. Default to first var.aws_bedrock_regions region or the current region."
+  description = "AWS region for Transcribe speech-to-text service. Default to every var.aws_bedrock_regions region as a failover candidate, or the current region."
   type        = string
   default     = null
 }
@@ -295,8 +341,20 @@ variable "aws_s3_files_prefix" {
   default     = null
 }
 
+variable "aws_s3_videos_prefix" {
+  description = "S3 prefix (folder path) for videos generated through the Videos API. Default to 'videos/'."
+  type        = string
+  default     = null
+}
+
+variable "aws_s3_videos_expires_after" {
+  description = "Retention period in seconds for generated videos. When set, Video.expires_at is reported, expired downloads return 404, and a matching S3 Lifecycle expiration rule is created on the module-managed buckets. Default to no expiry."
+  type        = number
+  default     = null
+}
+
 variable "aws_translate_region" {
-  description = "AWS region for Translate text translation service. Default to first var.aws_bedrock_regions region or the current region."
+  description = "AWS region for Translate text translation service. Default to every var.aws_bedrock_regions region as a failover candidate, or the current region."
   type        = string
   default     = null
 }
@@ -315,6 +373,12 @@ variable "openai_routes_prefix" {
 
 variable "anthropic_routes_prefix" {
   description = "Anthropic API compatible routes prefix. Default to '/anthropic'."
+  type        = string
+  default     = null
+}
+
+variable "cohere_routes_prefix" {
+  description = "Cohere API compatible routes prefix. Default to '/cohere'."
   type        = string
   default     = null
 }
@@ -465,14 +529,44 @@ variable "drop_unsupported_system_prompt" {
 }
 
 variable "tokens_estimation" {
-  description = "If True, estimate the number of tokens using a tokenizer when not directly returned by the model. Default to false."
+  description = "Deprecated and ignored since stdapi.ai v1.14.0: token estimation has been removed; only real AWS-billed usage is reported."
   type        = bool
   default     = null
 }
 
 variable "tokens_estimation_default_encoding" {
-  description = "Tiktoken Tokenizer encoding to use for token count estimation."
+  description = "Deprecated and ignored since stdapi.ai v1.14.0: token estimation has been removed."
   type        = string
+  default     = null
+}
+
+variable "aws_bedrock_session_encryption_key_arn" {
+  description = "KMS key ARN encrypting the AWS Bedrock sessions that back stored responses and chat completions (store=true). Default to the AWS-managed key."
+  type        = string
+  default     = null
+}
+
+variable "cloudwatch_metrics" {
+  description = "If True, emit per-request AWS-billed usage as CloudWatch Embedded Metric Format (EMF) log lines. Default to false."
+  type        = bool
+  default     = null
+}
+
+variable "cloudwatch_metrics_namespace" {
+  description = "CloudWatch namespace for the emitted usage metrics. Default to 'stdapi'."
+  type        = string
+  default     = null
+}
+
+variable "cost_tracking" {
+  description = "Enable real-time cost tracking from live AWS pricing (adds the pricing:GetProducts permission). Default to false."
+  type        = bool
+  default     = null
+}
+
+variable "cost_price_overrides" {
+  description = "Unit price overrides for models not covered by the AWS Price List API, as a map of model IDs to dimension-name/price maps."
+  type        = map(map(number))
   default     = null
 }
 
@@ -527,6 +621,24 @@ variable "cors_allow_origins" {
 variable "trusted_hosts" {
   description = "List of trusted host header values for Host header validation. Supports wildcard subdomains. Disabled by default."
   type        = list(string)
+  default     = null
+}
+
+variable "proxy_trusted_hosts" {
+  description = "Trusted proxy hosts/IPs (CIDRs) whose X-Forwarded-* headers are honored when proxy headers are enabled. Restrict to your reverse proxy's IP range so direct clients cannot forge their source IP. When null and proxy headers are auto-enabled (var.alb_enabled and var.log_client_ip both true), defaults to the ALB subnet CIDRs so only the ALB is trusted; otherwise the server default ('*') applies."
+  type        = list(string)
+  default     = null
+}
+
+variable "max_input_file_size" {
+  description = "Maximum size in bytes of an inline input file loaded into memory (base64, data URI, or a downloaded HTTP(S)/S3 source). Requests exceeding it are rejected with HTTP 413 before the content is fully decoded. Default to 0 (no limit)."
+  type        = number
+  default     = null
+}
+
+variable "max_concurrent_input_downloads" {
+  description = "Maximum number of input files fetched or resolved concurrently within a single request, bounding outbound downloads against socket/memory exhaustion and SSRF amplification. Default to 8."
+  type        = number
   default     = null
 }
 
@@ -585,7 +697,7 @@ variable "image_generation_model" {
 variable "version_to_deploy" {
   description = "Container image version tag from AWS Marketplace. Leave unset to automatically use the latest stable version. Only override for testing or rollback purposes."
   type        = string
-  default     = "1.13.0"
+  default     = "1.14.0"
 }
 
 # KMS configuration

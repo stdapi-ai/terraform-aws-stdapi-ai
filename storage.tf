@@ -15,6 +15,9 @@ locals {
 
   # S3 Files API prefix
   s3_files_prefix = var.aws_s3_files_prefix != null ? var.aws_s3_files_prefix : "files/"
+
+  # Videos prefix, using the application default when unset.
+  s3_videos_prefix = var.aws_s3_videos_prefix != null ? var.aws_s3_videos_prefix : "videos/"
 }
 
 # Data source for user-provided bucket ARN
@@ -108,6 +111,24 @@ resource "aws_s3_bucket_lifecycle_configuration" "main" {
     }
     noncurrent_version_expiration {
       noncurrent_days = 1
+    }
+  }
+
+  # Expire generated videos to match AWS_S3_VIDEOS_EXPIRES_AFTER (whole days, rounded up)
+  dynamic "rule" {
+    for_each = var.aws_s3_videos_expires_after != null ? [1] : []
+    content {
+      id     = "stdapi-videos-expiration"
+      status = "Enabled"
+      filter {
+        prefix = local.s3_videos_prefix
+      }
+      expiration {
+        days = ceil(var.aws_s3_videos_expires_after / 86400)
+      }
+      noncurrent_version_expiration {
+        noncurrent_days = 1
+      }
     }
   }
 

@@ -76,6 +76,18 @@ resource "aws_s3_bucket_lifecycle_configuration" "regional" {
     abort_incomplete_multipart_upload { days_after_initiation = 1 }
   }
 
+  # Expire generated videos to match AWS_S3_VIDEOS_EXPIRES_AFTER (whole days, rounded up)
+  dynamic "rule" {
+    for_each = var.aws_s3_videos_expires_after != null ? [1] : []
+    content {
+      id     = "stdapi-videos-expiration"
+      status = "Enabled"
+      filter { prefix = local.s3_videos_prefix }
+      expiration { days = ceil(var.aws_s3_videos_expires_after / 86400) }
+      noncurrent_version_expiration { noncurrent_days = 1 }
+    }
+  }
+
   rule {
     id     = "intelligent-tiering"
     status = "Enabled"

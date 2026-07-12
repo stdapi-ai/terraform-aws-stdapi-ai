@@ -6,34 +6,38 @@ locals {
   # Use Bedrock regions list directly
   bedrock_regions = var.aws_bedrock_regions != null ? var.aws_bedrock_regions : []
 
-  # Default region for all services is the first Bedrock region, or current region if Bedrock regions not specified
-  default_service_region = length(local.bedrock_regions) > 0 ? local.bedrock_regions[0] : data.aws_region.current.region
+  current_region = data.aws_region.current.region
 
-  # Determine the actual region each service will use
-  polly_region      = var.aws_polly_region != null ? var.aws_polly_region : local.default_service_region
-  comprehend_region = var.aws_comprehend_region != null ? var.aws_comprehend_region : local.default_service_region
-  transcribe_region = var.aws_transcribe_region != null ? var.aws_transcribe_region : local.default_service_region
-  translate_region  = var.aws_translate_region != null ? var.aws_translate_region : local.default_service_region
+  # Regions Bedrock may be called in, defaulting to the current one
+  candidate_regions = length(local.bedrock_regions) > 0 ? local.bedrock_regions : [local.current_region]
 
-  # Check if each service is configured for the current region
-  polly_in_current_region      = local.polly_region == data.aws_region.current.region
-  comprehend_in_current_region = local.comprehend_region == data.aws_region.current.region
-  transcribe_in_current_region = local.transcribe_region == data.aws_region.current.region
-  translate_in_current_region  = local.translate_region == data.aws_region.current.region
-  bedrock_in_current_region    = length(local.bedrock_regions) == 0 || contains(local.bedrock_regions, data.aws_region.current.region)
+  # Regions each service may be called in: an explicit setting pins the service
+  # to that single region, otherwise every Bedrock region is a candidate and the
+  # server fails over between them.
+  polly_regions      = var.aws_polly_region != null ? [var.aws_polly_region] : local.candidate_regions
+  comprehend_regions = var.aws_comprehend_region != null ? [var.aws_comprehend_region] : local.candidate_regions
+  transcribe_regions = var.aws_transcribe_region != null ? [var.aws_transcribe_region] : local.candidate_regions
+  translate_regions  = var.aws_translate_region != null ? [var.aws_translate_region] : local.candidate_regions
+
+  # Check if each service may be called in the current region
+  polly_in_current_region      = contains(local.polly_regions, local.current_region)
+  comprehend_in_current_region = contains(local.comprehend_regions, local.current_region)
+  transcribe_in_current_region = contains(local.transcribe_regions, local.current_region)
+  translate_in_current_region  = contains(local.translate_regions, local.current_region)
+  bedrock_in_current_region    = contains(local.candidate_regions, local.current_region)
 
   # Check if Secrets Manager is needed for API key authentication
   secretsmanager_needed = var.api_key_secretsmanager_secret != null
 
-  # Check if any AWS service region differs from current region
+  # Check if any AWS service may be called outside the current region
   # VPC endpoints only work within the same region, so cross-region access requires internet
-  cross_region_access_needed = (
-    !local.polly_in_current_region ||
-    !local.comprehend_in_current_region ||
-    !local.transcribe_in_current_region ||
-    !local.translate_in_current_region ||
-    !local.bedrock_in_current_region
-  )
+  cross_region_access_needed = length(setsubtract(distinct(concat(
+    local.candidate_regions,
+    local.polly_regions,
+    local.comprehend_regions,
+    local.transcribe_regions,
+    local.translate_regions,
+  )), [local.current_region])) > 0
 
   # Build VPC endpoints list dynamically based on which services are in the current region
   vpc_endpoints_core = concat(
@@ -56,7 +60,7 @@ locals {
 
 module "vpc" {
   source  = "JGoutin/vpc/aws"
-  version = "~> 1.1"
+  version = "~> 1.3"
 
   name_prefix                                = local.name
   tags                                       = local.apn_tags
