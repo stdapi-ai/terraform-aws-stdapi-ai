@@ -1,7 +1,7 @@
 # stdapi.ai - Terraform Module for AWS
 
-[![Terraform Module](https://img.shields.io/badge/Terraform-Enterprise%20Edition%20module-844FBA?logo=terraform&logoColor=ffffff)](https://registry.terraform.io/modules/stdapi-ai/stdapi-ai/aws/latest)
-[![OpenTofu Module](https://img.shields.io/badge/OpenTofu-Enterprise%20Edition%20module-FFDA18?logo=opentofu&logoColor=ffffff)](https://search.opentofu.org/module/stdapi-ai/stdapi-ai/aws/latest)
+[![Terraform Module](https://img.shields.io/badge/Terraform-Registry%20module-844FBA?logo=terraform&logoColor=ffffff)](https://registry.terraform.io/modules/stdapi-ai/stdapi-ai/aws/latest)
+[![OpenTofu Module](https://img.shields.io/badge/OpenTofu-Registry%20module-FFDA18?logo=opentofu&logoColor=ffffff)](https://search.opentofu.org/module/stdapi-ai/stdapi-ai/aws/latest)
 
 **Deploy an OpenAI, Anthropic & Cohere compatible AI gateway on AWS in minutes.** Production-ready ECS Fargate infrastructure with HTTPS, WAF, auto-scaling, and monitoring — all from a single Terraform module.
 
@@ -12,8 +12,10 @@
 ### Prerequisites
 
 1. **[Subscribe to stdapi.ai](https://aws.amazon.com/marketplace/pp/prodview-su2dajk5zawpo)** on AWS Marketplace (14-day free trial included)
-2. Install [Terraform](https://www.terraform.io/downloads) or [OpenTofu](https://opentofu.org/docs/intro/install/) >= 1.5
-3. Configure [AWS credentials](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-files.html)
+2. Install [Terraform](https://www.terraform.io/downloads) or [OpenTofu](https://opentofu.org/docs/intro/install/) >= 1.5 — see [Requirements](#requirements) for exact version constraints
+3. Configure [AWS credentials](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-files.html) with IAM permissions to create VPC, ECS, ALB, S3, KMS, IAM, and CloudWatch resources
+
+Deployable in any AWS region with ECS Fargate support.
 
 ### Minimal Deployment
 
@@ -45,7 +47,7 @@ module "stdapi_ai" {
   source  = "stdapi-ai/stdapi-ai/aws"
   version = "~> 1.0"
 
-  # Public HTTPS endpoint on a custom domain (ACM cert auto-issued via Route53)
+  # Public HTTPS endpoint on a custom domain (ACM cert auto-issued via Route 53)
   alb_enabled           = true
   alb_public            = true
   alb_domain_name       = "api.example.com"
@@ -61,7 +63,7 @@ module "stdapi_ai" {
 }
 ```
 
-For ready-to-deploy variants (single-region, EU/US multi-region, Open WebUI), see the [**samples repository**](https://github.com/stdapi-ai/samples). For deeper patterns (BYO VPC / ALB / Route53 / S3, manual ECS, cost-optimized), see the [**advanced deployment guide**](https://stdapi.ai/operations_deploy_advanced/).
+For ready-to-deploy variants (single-region, EU/US multi-region, Open WebUI), see the [**samples repository**](https://github.com/stdapi-ai/samples). For deeper patterns (BYO VPC / ALB / Route 53 / S3, manual ECS, cost-optimized), see the [**advanced deployment guide**](https://stdapi.ai/operations_deploy_advanced/).
 
 ## Module Features
 
@@ -115,11 +117,11 @@ Production-ready infrastructure following AWS Well-Architected Framework:
 
 | Component                                                                                                                                                                         | Created when                                                                                                                                                                                                                                                                                                                                                   |
 |-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Dedicated VPC, private app subnets, ECS Fargate service, KMS-encrypted S3 bucket(s), **S3 gateway endpoint**, CloudWatch logs                                                     | Always — unless you pass your own `subnet_ids`, which skips VPC/subnet/endpoint creation entirely                                                                                                                                                                                                                                                              |
-| **NAT gateways** (private internet egress)                                                                                                                                        | **Default.** Created whenever the app needs internet: AWS Marketplace auto-subscribe is on (`aws_bedrock_marketplace_auto_subscribe`, default `true`) **or** any AWS service runs outside the deployment region (e.g. multi-region `aws_bedrock_regions`). Set `nat_gateways_allowed = false` to instead make the app subnets public (cheaper, less isolated). |
-| **Interface VPC endpoints** — Bedrock, Polly, Transcribe, Comprehend, Translate, Logs, SSM, ECR, Marketplace metering (Secrets Manager only with `api_key_secretsmanager_secret`) | Only when the app needs **no** internet egress: `aws_bedrock_marketplace_auto_subscribe = false` **and** every AWS service is in the deployment region **and** `vpc_endpoints_allowed = true` (default). Replaces the NAT path — the two are never created together.                                                                                           |
+| Dedicated VPC, private app subnets, ECS Fargate service, KMS-encrypted S3 bucket(s), **S3 gateway endpoint**, CloudWatch logs                                                     | Always — except: passing your own `subnet_ids` skips VPC/subnet/endpoint creation entirely, and passing your own `aws_s3_bucket` skips bucket creation                                                                                                                                                                                                                                                              |
+| **NAT gateways** (private internet egress)                                                                                                                                        | **Default.** Created whenever the app needs internet: AWS Marketplace auto-subscribe is on (`aws_bedrock_marketplace_auto_subscribe`, enabled unless explicitly set to `false`) **or** any AWS service runs outside the deployment region (e.g. multi-region `aws_bedrock_regions`). Set `nat_gateways_allowed = false` to instead make the app subnets public (cheaper, less isolated). |
+| **Interface VPC endpoints** — Amazon Bedrock, Amazon Polly, Amazon Transcribe, Amazon Comprehend, Amazon Translate, CloudWatch Logs, SSM, ECR, Marketplace metering (Secrets Manager only with `api_key_secretsmanager_secret`) | Only when the app needs **no** internet egress: `aws_bedrock_marketplace_auto_subscribe = false` **and** every AWS service is in the deployment region **and** `vpc_endpoints_allowed = true` (default). Replaces the NAT path — the two are never created together.                                                                                           |
 | Public subnets                                                                                                                                                                    | Only with a public ALB (`alb_enabled = true` **and** `alb_public = true`)                                                                                                                                                                                                                                                                                      |
-| ALB + HTTPS listener / ACM certificate                                                                                                                                            | `alb_enabled = true` (HTTPS when `alb_domain_name` / `alb_certificate_arn` is set; auto ACM + Route53 via `alb_domain_name`). Without an ALB the service is only reachable from inside the VPC.                                                                                                                                                                |
+| ALB + HTTPS listener / ACM certificate                                                                                                                                            | `alb_enabled = true` (HTTPS when `alb_domain_name` / `alb_certificate_arn` is set; auto ACM + Route 53 via `alb_domain_name`). Without an ALB the service is only reachable from inside the VPC.                                                                                                                                                                |
 | WAF (rate limiting, IP filtering)                                                                                                                                                 | `alb_waf_enabled = true` (requires `alb_enabled`)                                                                                                                                                                                                                                                                                                              |
 | API key authentication                                                                                                                                                            | One of `api_key_create`, `api_key`, `api_key_ssm_parameter`, `api_key_secretsmanager_secret`                                                                                                                                                                                                                                                                   |
 | CloudWatch alarms (error/critical logs)                                                                                                                                           | `alarms_enabled = true`                                                                                                                                                                                                                                                                                                                                        |
@@ -136,7 +138,7 @@ Ready-to-deploy Terraform examples live in the [**stdapi.ai samples repository**
 | [getting_started_production_us](https://github.com/stdapi-ai/samples/tree/main/getting_started_production_us) | Multi-region US deployment (3 regions) for high availability |
 | [getting_started_openwebui](https://github.com/stdapi-ai/samples/tree/main/getting_started_openwebui) | Full Open WebUI chat platform stack (Aurora + Valkey + SearXNG + stdapi.ai) |
 
-For integration patterns against existing infrastructure (BYO VPC, ALB, Route53 zone, or S3 bucket) and non-Terraform deployments (manual ECS, EKS), see the [**advanced deployment guide**](https://stdapi.ai/operations_deploy_advanced/).
+For integration against existing infrastructure and non-Terraform deployments, see the [advanced deployment guide](https://stdapi.ai/operations_deploy_advanced/).
 
 ## Documentation
 
@@ -159,14 +161,6 @@ For integration patterns against existing infrastructure (BYO VPC, ALB, Route53 
 stdapi.ai is an **AWS Qualified Software** solution, verified against AWS technical and security requirements for AWS Marketplace.
 </div>
 
-## Technical Requirements
-
-- **AWS Marketplace Subscription** — [Subscribe here](https://aws.amazon.com/marketplace/pp/prodview-su2dajk5zawpo) (14-day free trial included)
-- **AWS Regions** — All regions with ECS Fargate support
-- **IAM Permissions** — Permissions to create VPC, ECS, ALB, S3, KMS, IAM, CloudWatch resources
-
-See [Requirements](#requirements) below for exact Terraform/OpenTofu and provider version constraints.
-
 ## Security Hub Controls
 
 Controls are grouped below by the deployment feature that gates them, not by which internal module implements them — the baseline section always applies; the rest only come into play once you enable the corresponding input. Only controls whose resolution is worth calling out are listed; N/A controls for resource types this module never creates (EFS, Classic Load Balancers, ECS task sets, Windows containers, Route 53 hosted zones/health checks) are omitted entirely.
@@ -175,7 +169,7 @@ Severity: 🔴 Critical · 🟠 High · 🟡 Medium · 🔵 Low
 
 ### Baseline (ECS Fargate, KMS keys, S3 buckets, IAM policies)
 
-Always created, regardless of `subnet_ids`, `alb_enabled`, or any other toggle. Key inputs: `tags = local.apn_tags` (never null) is applied to every resource below, `cloudwatch_logs_retention_in_days` defaults `365`, the `main` container sets `read_only_root_filesystem = true` and `user = "65532:65532"`, secrets are passed via `secrets` never `environment`, no `security_group_rules_ingress`/`security_group_connect_ingress` is passed (the only extra ingress rule references the ALB's security group, never a CIDR).
+Always created, regardless of `subnet_ids`, `alb_enabled`, or any other toggle. Key inputs: `tags = local.apn_tags` (never null) is applied to every resource below, `cloudwatch_logs_retention_in_days` defaults `365`, the `main` container sets `read_only_root_filesystem = true` and `user = "65532:65532"`, secrets are passed via `secrets` never `environment`, and no `security_group_rules_ingress`/`security_group_connect_ingress` (internal wiring — not module variables) is passed (the only extra ingress rule references the ALB's security group, never a CIDR).
 
 | Control | Severity | Title | Status | Notes |
 |---|---|---|---|---|
@@ -215,7 +209,7 @@ Thanks to `tags` always being non-null, ECS.13/ECS.15 (tagged, above) actually *
 
 ### Dedicated VPC (default; skipped entirely when you pass your own `subnet_ids`)
 
-Key inputs: `vpc_flow_log_retention_days` defaults `365`, `internet_access_allowed` **defaults to `true`** (since `aws_bedrock_marketplace_auto_subscribe` defaults to auto-subscribe, which requires internet access for the AWS Marketplace API), `nat_gateways_allowed` defaults `true`, `vpc_endpoints_services` already includes `s3`, `ssm`, `logs`, `ecr.api`, `ecr.dkr` by default.
+Key inputs: flow-log retention follows `cloudwatch_logs_retention_in_days` (default `365`); internet access is **enabled by default** (internal wiring — driven by `aws_bedrock_marketplace_auto_subscribe`, whose auto-subscribe default requires internet access for the AWS Marketplace API, and by any cross-region service usage); `nat_gateways_allowed` defaults `true`; the interface endpoint set (internal wiring — not a module variable) always includes `s3`, `ssm`, `logs`, `ecr.api`, `ecr.dkr`.
 
 | Control | Severity | Title | Status | Notes |
 |---|---|---|---|---|
@@ -227,7 +221,7 @@ Key inputs: `vpc_flow_log_retention_days` defaults `365`, `internet_access_allow
 | EC2.37 / EC2.39 / EC2.40 / EC2.41 / EC2.42 / EC2.43 / EC2.44 / EC2.46 / EC2.174 | 🔵 Low | Various VPC resources should be tagged | ✅ Pass | A `Name` tag is always merged in regardless of `tags`. |
 | EC2.48 | 🔵 Low | VPC flow logs should be tagged | ✅ Pass | Non-null `tags` is applied directly, with no fallback. |
 | IAM.24 | 🔵 Low | IAM roles should be tagged | ✅ Pass | Same reasoning as EC2.48, for the flow log's IAM role. |
-| CloudWatch.16 | 🟡 Medium | CloudWatch log groups should be retained for a specified time period | ✅ Pass | VPC flow log retention defaults `365`. |
+| CloudWatch.16 | 🟡 Medium | CloudWatch log groups should be retained for a specified time period | ✅ Pass | Flow-log retention follows `cloudwatch_logs_retention_in_days` (default `365`). |
 
 **Sub-variant — NAT gateways (default) vs. VPC interface endpoints (no internet egress)**
 
@@ -240,7 +234,7 @@ Key inputs: `vpc_flow_log_retention_days` defaults `365`, `internet_access_allow
 
 | Control | Severity | Title | Status | Notes |
 |---|---|---|---|---|
-| EC2.55 / EC2.56 / EC2.57 / EC2.58 / EC2.60 | 🟡 Medium | VPC should be configured with an interface endpoint for ECR API / Docker Registry / SSM / SSM Incident Manager Contacts / SSM Incident Manager | ⚠️ Conditional (default: ❌ Fail) | `vpc_endpoints_services` already requests `ecr.api`/`ecr.dkr`/`ssm`, but that only takes effect when there's no direct internet route — and by default there is one. Set `compliance_vpc_endpoints_enabled = true` to force these 5 endpoints regardless of internet posture. |
+| EC2.55 / EC2.56 / EC2.57 / EC2.58 / EC2.60 | 🟡 Medium | VPC should be configured with an interface endpoint for ECR API / Docker Registry / SSM / SSM Incident Manager Contacts / SSM Incident Manager | ⚠️ Conditional (default: ❌ Fail) | The endpoint set (internal wiring `vpc_endpoints_services`) already requests `ecr.api`/`ecr.dkr`/`ssm`, but that only takes effect when there's no direct internet route — and by default there is one. Set `compliance_vpc_endpoints_enabled = true` to force these 5 endpoints regardless of internet posture. |
 
 Thanks to `tags` always being non-null, EC2.48 and IAM.24 (tagged, above) actually **pass** — leaving `tags` unset would fail them. One gap remains at default settings: **EC2.55/56/57/58/60** are silently ineffective, because internet access is required for AWS Marketplace auto-subscribe — set `compliance_vpc_endpoints_enabled = true` to close it.
 
@@ -293,7 +287,7 @@ Enabling it creates five alarms:
 
 The four ECS-level alarms require `sns_topic_arn` to be set (they always attach it as an action); the log-based alarm tolerates a null `sns_topic_arn` and simply exists without notifying anyone.
 
-**GuardDuty Runtime Monitoring endpoint** (`guardduty_vpc_endpoint_enabled = true`, dedicated VPC only) — not a Security Hub control. Enforced regardless of internet posture.
+**Amazon GuardDuty Runtime Monitoring endpoint** (`guardduty_vpc_endpoint_enabled = true`, dedicated VPC only) — not a Security Hub control. Enforced regardless of internet posture.
 
 **Route 53 Resolver DNS Firewall** (`dns_firewall_enabled = true`, dedicated VPC only) — not a Security Hub control. Blocks/alerts on DNS queries to known-malicious domains (AWS Managed Domain Lists, plus DGA/DNS-tunneling detection via `dns_firewall_advanced_enabled`). Complements application-level SSRF protection against malicious-URL injection through user-supplied URL/file reference fields. Has no effect (and cannot be enabled) when `subnet_ids` is set.
 
@@ -406,15 +400,15 @@ All the options above are off by default and never required to pass a control in
 | <a name="input_alb_access_logging_enabled"></a> [alb\_access\_logging\_enabled](#input\_alb\_access\_logging\_enabled) | If true, enable ALB access logging to a dedicated S3 bucket. Security Hub: ELB.5 (Application Load Balancers should have logging enabled) — default true = pass; only relevant when var.alb\_enabled is true. | `bool` | `true` | no |
 | <a name="input_alb_certificate_arn"></a> [alb\_certificate\_arn](#input\_alb\_certificate\_arn) | Existing ACM certificate ARN to attach to the HTTPS listener. When specified, takes precedence over certificate\_create. If not specified and certificate\_create is true, a certificate will be created automatically. | `string` | `null` | no |
 | <a name="input_alb_certificate_create"></a> [alb\_certificate\_create](#input\_alb\_certificate\_create) | If true, create an ACM certificate and validate it via DNS. Only used when certificate\_arn is not specified. Requires route53\_zone\_id, domain\_name, and route53\_zone\_private=false. | `bool` | `true` | no |
-| <a name="input_alb_domain_name"></a> [alb\_domain\_name](#input\_alb\_domain\_name) | Primary domain name for the application (e.g., api.example.com). Creates Route53 A record and ACM certificate. If route53\_zone\_id is not specified, automatically looks up the most specific parent domain zone. | `string` | `null` | no |
+| <a name="input_alb_domain_name"></a> [alb\_domain\_name](#input\_alb\_domain\_name) | Primary domain name for the application (e.g., api.example.com). Creates Route 53 A record and ACM certificate. If route53\_zone\_id is not specified, automatically looks up the most specific parent domain zone. | `string` | `null` | no |
 | <a name="input_alb_enabled"></a> [alb\_enabled](#input\_alb\_enabled) | If true, create an Application Load Balancer for the ECS service. Cannot be used with external subnets (subnet\_ids). | `bool` | `false` | no |
 | <a name="input_alb_idle_timeout"></a> [alb\_idle\_timeout](#input\_alb\_idle\_timeout) | The time in seconds that the connection is allowed to be idle. Range: 1-4000 seconds. Default to 3600 (1 hour) to support slow LLM responses and long-running operations like AWS Transcribe. | `number` | `3600` | no |
 | <a name="input_alb_ingress_ipv4_cidrs"></a> [alb\_ingress\_ipv4\_cidrs](#input\_alb\_ingress\_ipv4\_cidrs) | List of IPv4 CIDR blocks allowed to access the ALB. Default to ['0.0.0.0/0'] for public access. | `list(string)` | <pre>[<br/>  "0.0.0.0/0"<br/>]</pre> | no |
 | <a name="input_alb_ingress_ipv6_cidrs"></a> [alb\_ingress\_ipv6\_cidrs](#input\_alb\_ingress\_ipv6\_cidrs) | List of IPv6 CIDR blocks allowed to access the ALB. Default to ['::/0'] for public access. | `list(string)` | <pre>[<br/>  "::/0"<br/>]</pre> | no |
 | <a name="input_alb_public"></a> [alb\_public](#input\_alb\_public) | If true, create a public (internet-facing) ALB with dedicated public subnets. If false, create a private (internal) ALB using app subnets. | `bool` | `false` | no |
-| <a name="input_alb_route53_zone_id"></a> [alb\_route53\_zone\_id](#input\_alb\_route53\_zone\_id) | Route53 hosted zone ID for DNS records. If not specified, automatically infers the zone from the parent domain of domain\_name (e.g., 'api.example.com' → 'example.com', 'api.sandbox.example.com' → 'sandbox.example.com'). | `string` | `null` | no |
-| <a name="input_alb_route53_zone_name"></a> [alb\_route53\_zone\_name](#input\_alb\_route53\_zone\_name) | Route53 hosted zone name for DNS records (e.g., 'example.com'). Alternative to route53\_zone\_id - module will look up the zone ID automatically. If specified with domain\_name, creates DNS records and ACM certificate. | `string` | `null` | no |
-| <a name="input_alb_route53_zone_private"></a> [alb\_route53\_zone\_private](#input\_alb\_route53\_zone\_private) | If true, the Route53 zone is private. If false, it's public. Used when looking up the zone by name. | `bool` | `false` | no |
+| <a name="input_alb_route53_zone_id"></a> [alb\_route53\_zone\_id](#input\_alb\_route53\_zone\_id) | Route 53 hosted zone ID for DNS records. If not specified, automatically infers the zone from the parent domain of domain\_name (e.g., 'api.example.com' → 'example.com', 'api.sandbox.example.com' → 'sandbox.example.com'). | `string` | `null` | no |
+| <a name="input_alb_route53_zone_name"></a> [alb\_route53\_zone\_name](#input\_alb\_route53\_zone\_name) | Route 53 hosted zone name for DNS records (e.g., 'example.com'). Alternative to route53\_zone\_id - module will look up the zone ID automatically. If specified with domain\_name, creates DNS records and ACM certificate. | `string` | `null` | no |
+| <a name="input_alb_route53_zone_private"></a> [alb\_route53\_zone\_private](#input\_alb\_route53\_zone\_private) | If true, the Route 53 zone is private. If false, it's public. Used when looking up the zone by name. | `bool` | `false` | no |
 | <a name="input_alb_ssl_policy"></a> [alb\_ssl\_policy](#input\_alb\_ssl\_policy) | SSL/TLS security policy for the ALB HTTPS listener. Defaults to the AWS-recommended post-quantum policy. See https://docs.aws.amazon.com/elasticloadbalancing/latest/application/describe-ssl-policies.html | `string` | `"ELBSecurityPolicy-TLS13-1-2-Res-PQ-2025-09"` | no |
 | <a name="input_alb_waf_block_anonymous_ips"></a> [alb\_waf\_block\_anonymous\_ips](#input\_alb\_waf\_block\_anonymous\_ips) | If true, block requests from anonymous IP addresses (VPNs, proxies, Tor exit nodes). | `bool` | `false` | no |
 | <a name="input_alb_waf_enabled"></a> [alb\_waf\_enabled](#input\_alb\_waf\_enabled) | If true, create a WAF WebACL and associate it with the ALB (requires alb\_enabled=true). | `bool` | `false` | no |
@@ -461,7 +455,7 @@ All the options above are off by default and never required to pass a control in
 | <a name="input_aws_bedrock_mantle_service_header"></a> [aws\_bedrock\_mantle\_service\_header](#input\_aws\_bedrock\_mantle\_service\_header) | If true, honor the 'x-stdapi-service: bedrock-mantle' request header to route a dual-homed model through Bedrock Mantle for that request. Cannot be combined with Bedrock Guardrails. Default to false. | `bool` | `null` | no |
 | <a name="input_aws_bedrock_marketplace_auto_subscribe"></a> [aws\_bedrock\_marketplace\_auto\_subscribe](#input\_aws\_bedrock\_marketplace\_auto\_subscribe) | If true, allow the server to automatically subscribe to new models in the AWS Marketplace. Default to true. | `bool` | `null` | no |
 | <a name="input_aws_bedrock_max_retries"></a> [aws\_bedrock\_max\_retries](#input\_aws\_bedrock\_max\_retries) | Maximum number of retries for Bedrock invocations. When region routing is enabled, retries cycle through all available regions. Default to 9. | `number` | `null` | no |
-| <a name="input_aws_bedrock_model_arn_mapping"></a> [aws\_bedrock\_model\_arn\_mapping](#input\_aws\_bedrock\_model\_arn\_mapping) | Map standard model IDs to custom inference profile or prompt router ARNs. This allows server administrators to override the default cross-region inference profiles with custom application inference profiles, cross-region inference profiles, or prompt routers.<br/><br/>Supported ARN types:<br/>- Cross-region inference profile: arn:aws:bedrock:REGION:ACCOUNT:inference-profile/ID<br/>- Application inference profile: arn:aws:bedrock:REGION:ACCOUNT:application-inference-profile/ID<br/>- Prompt router: arn:aws:bedrock:REGION:ACCOUNT:default-prompt-router/ID<br/><br/>Example: {<br/>  "anthropic.claude-3-5-sonnet-20241022-v2:0" = "arn:aws:bedrock:us-east-1:123456789012:application-inference-profile/my-custom-profile"<br/>  "anthropic.claude-3-5-haiku-20241022-v1:0" = "arn:aws:bedrock:us-east-1:123456789012:default-prompt-router/my-router"<br/>} | `map(string)` | `null` | no |
+| <a name="input_aws_bedrock_model_arn_mapping"></a> [aws\_bedrock\_model\_arn\_mapping](#input\_aws\_bedrock\_model\_arn\_mapping) | Map standard model IDs to custom inference profile or prompt router ARNs. This allows server administrators to override the default cross-region inference profiles with custom application inference profiles, cross-region inference profiles, or prompt routers.<br/><br/>Supported ARN types:<br/>- Cross-region inference profile: arn:aws:bedrock:REGION:ACCOUNT:inference-profile/ID<br/>- Application inference profile: arn:aws:bedrock:REGION:ACCOUNT:application-inference-profile/ID<br/>- Prompt router: arn:aws:bedrock:REGION:ACCOUNT:default-prompt-router/ID<br/><br/>Example: {<br/>  "anthropic.claude-3-5-sonnet-20241022-v2:0" = "arn:aws:bedrock:us-east-1:123456789012:application-inference-profile/my-custom-profile"<br/>  "anthropic.claude-haiku-4-5-20251001-v1:0" = "arn:aws:bedrock:us-east-1:123456789012:default-prompt-router/my-router"<br/>} | `map(string)` | `null` | no |
 | <a name="input_aws_bedrock_model_region_restrict"></a> [aws\_bedrock\_model\_region\_restrict](#input\_aws\_bedrock\_model\_region\_restrict) | Restrict a model to specific region(s) only. Can be used when a model provides important features only in certain regions.<br/><br/>Keys are Bedrock model IDs (or prefixes), values are ordered lists of allowed regions. When set, the model will only be available in the listed regions (intersected with the regions where it is actually available).<br/><br/>Example: { "amazon.nova-pro-v1:0" = ["us-east-1"] }<br/><br/>Use case: Nova grounding is only available in us-east-1, so restricting nova-pro to us-east-1 ensures grounding always works. | `map(list(string))` | `null` | no |
 | <a name="input_aws_bedrock_region_routing"></a> [aws\_bedrock\_region\_routing](#input\_aws\_bedrock\_region\_routing) | Automatic region routing strategy for Bedrock invocations. Distributes requests across configured regions to handle quota limits and regional unavailability. Strategies: 'disabled' (no routing), 'ordered' (try regions in configured order, default), 'lowest\_latency' (prefer region with lowest measured latency), 'round\_robin' (distribute evenly, incompatible with prompt caching). Requires at least 2 regions in aws\_bedrock\_regions. | `string` | `null` | no |
 | <a name="input_aws_bedrock_region_routing_max_quota_backoff_seconds"></a> [aws\_bedrock\_region\_routing\_max\_quota\_backoff\_seconds](#input\_aws\_bedrock\_region\_routing\_max\_quota\_backoff\_seconds) | Hard ceiling in seconds on the exponential quota backoff for a single region. Quota backoff doubles on each consecutive error; this value caps how high it can grow. Only effective when aws\_bedrock\_region\_routing is not 'disabled'. Default to 3600 (1 hour). | `number` | `null` | no |
@@ -553,7 +547,7 @@ All the options above are off by default and never required to pass a control in
 | <a name="input_tokens_estimation"></a> [tokens\_estimation](#input\_tokens\_estimation) | Deprecated and ignored since stdapi.ai v1.14.0: token estimation has been removed; only real AWS-billed usage is reported. | `bool` | `null` | no |
 | <a name="input_tokens_estimation_default_encoding"></a> [tokens\_estimation\_default\_encoding](#input\_tokens\_estimation\_default\_encoding) | Deprecated and ignored since stdapi.ai v1.14.0: token estimation has been removed. | `string` | `null` | no |
 | <a name="input_trusted_hosts"></a> [trusted\_hosts](#input\_trusted\_hosts) | List of trusted host header values for Host header validation. Supports wildcard subdomains. Disabled by default. | `list(string)` | `null` | no |
-| <a name="input_version_to_deploy"></a> [version\_to\_deploy](#input\_version\_to\_deploy) | Container image version tag from AWS Marketplace. Leave unset to automatically use the latest stable version. Only override for testing or rollback purposes. | `string` | `"1.14.0"` | no |
+| <a name="input_version_to_deploy"></a> [version\_to\_deploy](#input\_version\_to\_deploy) | Container image version tag from AWS Marketplace. Leave unset to automatically use the latest stable version. Only override for testing or rollback purposes. A '-arm64' or '-amd64' suffix is appended automatically based on var.cpu\_architecture, so the value must not include an architecture suffix. | `string` | `"1.14.0"` | no |
 | <a name="input_vpc_cidr"></a> [vpc\_cidr](#input\_vpc\_cidr) | CIDR block for the dedicated VPC. | `string` | `"10.0.0.0/16"` | no |
 | <a name="input_vpc_endpoints_allowed"></a> [vpc\_endpoints\_allowed](#input\_vpc\_endpoints\_allowed) | If true, VPC endpoints interfaces are privileged to give AWS services access to the application if no internet access is required. VPC endpoint Gateway are always provisioned. Disable only if cost is privileged over security. | `bool` | `true` | no |
 | <a name="input_vpc_flow_log_enabled"></a> [vpc\_flow\_log\_enabled](#input\_vpc\_flow\_log\_enabled) | If true, enable VPC flow log. Disable only if cost is privileged over security. | `bool` | `true` | no |

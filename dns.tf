@@ -19,7 +19,7 @@ locals {
   )
 }
 
-# Look up Route53 zone by name if needed
+# Look up Route 53 zone by name if needed
 # Try the first possible zone name (most specific parent domain)
 data "aws_route53_zone" "by_name" {
   count        = local.zone_name_to_lookup != null ? 1 : 0
@@ -28,7 +28,7 @@ data "aws_route53_zone" "by_name" {
 }
 
 locals {
-  # Determine Route53 zone ID (priority: explicit zone_id > looked up by name > null)
+  # Determine Route 53 zone ID (priority: explicit zone_id > looked up by name > null)
   route53_zone_id = var.alb_route53_zone_id != null ? var.alb_route53_zone_id : (
     local.zone_name_to_lookup != null ? data.aws_route53_zone.by_name[0].zone_id : null
   )
@@ -59,7 +59,7 @@ resource "aws_acm_certificate" "main" {
   tags = merge(local.apn_tags, { Name = local.name })
 }
 
-# Route53 records for ACM DNS validation (only for public zones when certificate_create is true)
+# Route 53 records for ACM DNS validation (only for public zones when certificate_create is true)
 # Use domain names from variables to avoid known-after-apply issues
 resource "aws_route53_record" "acm_validation" {
   for_each = local.dns_enabled && !var.alb_route53_zone_private && var.alb_certificate_create ? {
@@ -93,7 +93,7 @@ resource "aws_acm_certificate_validation" "main" {
   }
 }
 
-# Route53 A record for primary domain (points to ALB)
+# Route 53 A record for primary domain (points to ALB)
 resource "aws_route53_record" "main" {
   count   = local.dns_enabled ? 1 : 0
   zone_id = local.route53_zone_id
@@ -107,7 +107,7 @@ resource "aws_route53_record" "main" {
   }
 }
 
-# Route53 AAAA record for primary domain (IPv6, points to ALB)
+# Route 53 AAAA record for primary domain (IPv6, points to ALB)
 resource "aws_route53_record" "main_ipv6" {
   count   = local.dns_enabled && module.vpc.ipv6_enabled ? 1 : 0
   zone_id = local.route53_zone_id

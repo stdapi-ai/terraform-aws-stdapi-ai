@@ -102,7 +102,7 @@ variable "aws_bedrock_model_arn_mapping" {
 
     Example: {
       "anthropic.claude-3-5-sonnet-20241022-v2:0" = "arn:aws:bedrock:us-east-1:123456789012:application-inference-profile/my-custom-profile"
-      "anthropic.claude-3-5-haiku-20241022-v1:0" = "arn:aws:bedrock:us-east-1:123456789012:default-prompt-router/my-router"
+      "anthropic.claude-haiku-4-5-20251001-v1:0" = "arn:aws:bedrock:us-east-1:123456789012:default-prompt-router/my-router"
     }
   EOT
   type        = map(string)
@@ -695,7 +695,7 @@ variable "image_generation_model" {
 }
 
 variable "version_to_deploy" {
-  description = "Container image version tag from AWS Marketplace. Leave unset to automatically use the latest stable version. Only override for testing or rollback purposes."
+  description = "Container image version tag from AWS Marketplace. Leave unset to automatically use the latest stable version. Only override for testing or rollback purposes. A '-arm64' or '-amd64' suffix is appended automatically based on var.cpu_architecture, so the value must not include an architecture suffix."
   type        = string
   default     = "1.14.0"
 }
@@ -955,25 +955,25 @@ variable "alb_idle_timeout" {
 }
 
 variable "alb_route53_zone_id" {
-  description = "Route53 hosted zone ID for DNS records. If not specified, automatically infers the zone from the parent domain of domain_name (e.g., 'api.example.com' → 'example.com', 'api.sandbox.example.com' → 'sandbox.example.com')."
+  description = "Route 53 hosted zone ID for DNS records. If not specified, automatically infers the zone from the parent domain of domain_name (e.g., 'api.example.com' → 'example.com', 'api.sandbox.example.com' → 'sandbox.example.com')."
   type        = string
   default     = null
 }
 
 variable "alb_route53_zone_name" {
-  description = "Route53 hosted zone name for DNS records (e.g., 'example.com'). Alternative to route53_zone_id - module will look up the zone ID automatically. If specified with domain_name, creates DNS records and ACM certificate."
+  description = "Route 53 hosted zone name for DNS records (e.g., 'example.com'). Alternative to route53_zone_id - module will look up the zone ID automatically. If specified with domain_name, creates DNS records and ACM certificate."
   type        = string
   default     = null
 }
 
 variable "alb_domain_name" {
-  description = "Primary domain name for the application (e.g., api.example.com). Creates Route53 A record and ACM certificate. If route53_zone_id is not specified, automatically looks up the most specific parent domain zone."
+  description = "Primary domain name for the application (e.g., api.example.com). Creates Route 53 A record and ACM certificate. If route53_zone_id is not specified, automatically looks up the most specific parent domain zone."
   type        = string
   default     = null
 }
 
 variable "alb_route53_zone_private" {
-  description = "If true, the Route53 zone is private. If false, it's public. Used when looking up the zone by name."
+  description = "If true, the Route 53 zone is private. If false, it's public. Used when looking up the zone by name."
   type        = bool
   default     = false
 }
