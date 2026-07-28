@@ -205,7 +205,6 @@ data "aws_iam_policy_document" "server" {
       "bedrock:InvokeTool",
       "bedrock:ListAsyncInvokes",
       "bedrock:Rerank",
-      "bedrock:StartAsyncInvoke",
     ]
     resources = ["*"]
   }
@@ -255,7 +254,6 @@ data "aws_iam_policy_document" "server" {
       "bedrock-mantle:DeleteInference",
       "bedrock-mantle:ListModels",
       "bedrock-mantle:GetModel",
-      "bedrock-mantle:CountTokens",
       "bedrock-mantle:CancelInference",
     ]
     resources = ["arn:aws:bedrock-mantle:*:${data.aws_caller_identity.current.account_id}:project/*"]
@@ -350,9 +348,6 @@ data "aws_iam_policy_document" "server" {
         "s3:PutObjectTagging",
         "s3:GetObject",
         "s3:DeleteObject",
-        "s3:CreateMultipartUpload",
-        "s3:UploadPart",
-        "s3:CompleteMultipartUpload",
         "s3:AbortMultipartUpload",
         "s3:ListMultipartUploadParts",
       ]
@@ -396,9 +391,6 @@ data "aws_iam_policy_document" "server" {
         "s3:PutObjectTagging",
         "s3:GetObject",
         "s3:DeleteObject",
-        "s3:CreateMultipartUpload",
-        "s3:UploadPart",
-        "s3:CompleteMultipartUpload",
         "s3:AbortMultipartUpload",
         "s3:ListMultipartUploadParts",
       ]
@@ -512,8 +504,11 @@ data "aws_iam_policy_document" "server" {
       sid = "TranscribeS3Storage"
       actions = [
         "s3:PutObject",
+        "s3:PutObjectTagging",
         "s3:GetObject",
-        "s3:DeleteObject"
+        "s3:DeleteObject",
+        "s3:AbortMultipartUpload",
+        "s3:ListMultipartUploadParts",
       ]
       resources = ["arn:aws:s3:::${var.aws_transcribe_s3_bucket}/*"]
     }
