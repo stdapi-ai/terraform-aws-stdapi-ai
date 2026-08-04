@@ -195,13 +195,13 @@ Always created, regardless of `subnet_ids`, `alb_enabled`, or any other toggle. 
 | S3.8 | 🟠 High | S3 buckets should block public access (account/bucket combined check) | ✅ Pass | Same configuration as S3.2/S3.3. |
 | S3.5 | 🟡 Medium | S3 buckets should require requests to use SSL | ✅ Pass | Bucket policy denies all `s3:*` actions when `aws:SecureTransport` is false. |
 | S3.6 | 🟠 High | S3 bucket policies should restrict access to other AWS accounts | ✅ Pass | The only statement is the TLS-enforcement `Deny`; no cross-account `Allow`. |
-| S3.9 | 🟡 Medium | S3 buckets should have server access logging enabled | ✅ Pass | The main bucket logs to a shared SSE-S3-encrypted logs bucket (also used for ALB access logs); each regional bucket logs to its own per-Region logs bucket, since S3 access log destinations must stay in the source bucket's Region. |
+| S3.9 | 🟡 Medium | S3 buckets should have server access logging enabled | ⚠️ Pass on the data buckets, ❌ fail on the logs buckets | The main bucket logs to a shared SSE-S3-encrypted logs bucket (also used for ALB access logs); each regional bucket logs to its own per-Region logs bucket, since S3 access log destinations must stay in the source bucket's Region. The logs buckets themselves have no destination: pointing one at itself is refused by S3, and pointing two at each other makes each delivery generate another. |
 | S3.10 / S3.13 | 🟡 Medium / 🔵 Low | S3 buckets should have lifecycle configurations | ✅ Pass | Every bucket gets an unconditional lifecycle configuration (tmp cleanup, files expiration, intelligent-tiering). |
 | S3.11 | 🟡 Medium | S3 buckets should have event notifications enabled | ✅ Pass | `eventbridge = true` is set unconditionally — zero-config, no targets/rules required. |
 | S3.12 | 🟡 Medium | ACLs should not be used to manage access to S3 buckets | ✅ Pass | New buckets default to `BucketOwnerEnforced` (ACLs disabled). |
 | S3.14 | 🔵 Low | S3 buckets should have versioning enabled | ✅ Pass | `status = "Enabled"` unconditionally on every bucket. |
 | S3.15 | 🟡 Medium | S3 buckets should have Object Lock enabled | ⬜ N/A | Object Lock (WORM immutability) doesn't fit this bucket's purpose — it's temporary storage with active expiration rules (1-day tmp cleanup, 30-day Files API expiration), the opposite of what Object Lock is for. |
-| S3.17 | 🟡 Medium | S3 buckets should be encrypted at rest with AWS KMS keys | ✅ Pass | SSE-KMS with a dedicated customer-managed key, `bucket_key_enabled = true`. |
+| S3.17 | 🟡 Medium | S3 buckets should be encrypted at rest with AWS KMS keys | ⚠️ Pass on the data buckets, ❌ fail on the logs buckets | SSE-KMS with a dedicated customer-managed key, `bucket_key_enabled = true`. The logs buckets are SSE-S3: S3 server access logging and ALB access logging both refuse a customer-managed key as their destination, so this is the strongest encryption those buckets can carry. |
 | S3.20 | 🔵 Low | S3 buckets should have MFA delete enabled | ⬜ N/A (exempt) | AWS's own control text exempts buckets with a lifecycle configuration — every bucket here always has one. |
 | S3.22 / S3.23 | 🟡 Medium | S3 buckets should log object-level read/write events | ⬜ N/A | Account-level control requiring an org-wide multi-Region CloudTrail trail — outside this module's scope. |
 
@@ -215,7 +215,7 @@ Key inputs: flow-log retention follows `cloudwatch_logs_retention_in_days` (defa
 |---|---|---|---|---|
 | EC2.2 | 🟠 High | VPC default security groups should restrict all traffic | ✅ Pass | Unconditional. |
 | EC2.6 | 🟡 Medium | VPC flow logging should be enabled in all VPCs | ✅ Pass | `vpc_flow_log_enabled` defaults `true`. |
-| EC2.21 | 🟡 Medium | Network ACLs should not allow ingress from 0.0.0.0/0 to port 22/3389 | ✅ Pass | Public-facing ports are fixed to 8000 (app) and 80/443 (ingress) — never 22/3389. |
+| EC2.21 | 🟡 Medium | Network ACLs should not allow ingress from 0.0.0.0/0 to port 22/3389 | ❌ Fail (accepted) | The stateless network ACLs allow the ephemeral range for return traffic, which spans 3389. Unreachable: the security groups admit only 80/443 from the CIDRs you name, then only port 8000 from the load balancer. [Details](https://github.com/JGoutin/terraform-aws-vpc#why-ec221-fails). |
 | EC2.53 / EC2.54 / EC2.13 / EC2.14 | 🟠 High | VPC default security group should not allow ingress from 0.0.0.0/0 to remote administration ports | ✅ Pass | Unconditional. |
 | EC2.12 | 🔵 Low | Unused EIPs should be removed | ✅ Pass | Unconditional. |
 | EC2.37 / EC2.39 / EC2.40 / EC2.41 / EC2.42 / EC2.43 / EC2.44 / EC2.46 / EC2.174 | 🔵 Low | Various VPC resources should be tagged | ✅ Pass | A `Name` tag is always merged in regardless of `tags`. |
@@ -227,7 +227,7 @@ Key inputs: flow-log retention follows `cloudwatch_logs_retention_in_days` (defa
 
 | Control | Severity | Title | Status | Notes |
 |---|---|---|---|---|
-| EC2.15 | 🟡 Medium | EC2 subnets should not automatically assign public IP addresses | ✅ Pass by default | `nat_gateways_allowed` defaults `true`, so NAT (not public IPs) handles egress. Setting `nat_gateways_allowed = false` turns the app subnets public and fails this control. |
+| EC2.15 | 🟡 Medium | EC2 subnets should not automatically assign public IP addresses | ✅ Pass | No subnet assigns addresses on launch, in either architecture. With `nat_gateways_allowed = false` the app subnets become public, but the task still takes its address from `assign_public_ip` on its own network configuration rather than from the subnet. |
 | ECS.2 | 🟠 High | Services should not have public IP addresses assigned automatically | ✅ Pass by default | Same trigger as EC2.15 — the ECS service only gets a public IP when `nat_gateways_allowed = false`. |
 
 **Sub-variant — compliance VPC endpoints (`compliance_vpc_endpoints_enabled = true`)**
