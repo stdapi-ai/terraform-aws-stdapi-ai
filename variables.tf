@@ -697,7 +697,7 @@ variable "image_generation_model" {
 variable "version_to_deploy" {
   description = "Container image version tag from AWS Marketplace. Leave unset to automatically use the latest stable version. Only override for testing or rollback purposes. A '-arm64' or '-amd64' suffix is appended automatically based on var.cpu_architecture, so the value must not include an architecture suffix."
   type        = string
-  default     = "1.14.0"
+  default     = "1.15.0"
 }
 
 # KMS configuration

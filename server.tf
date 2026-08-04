@@ -338,6 +338,15 @@ data "aws_iam_policy_document" "server" {
     resources = ["arn:aws:bedrock:*:*:guardrail/*"]
   }
 
+  # Bedrock - Guardrail checks (Always Required)
+  # Backs the default Moderations model. The operation runs standalone checks
+  # and takes no guardrail identifier, so it has no resource to scope to.
+  statement {
+    sid       = "BedrockGuardrailChecks"
+    actions   = ["bedrock:InvokeGuardrailChecks"]
+    resources = ["*"]
+  }
+
   # S3 - File Storage (Optional)
   dynamic "statement" {
     for_each = local.s3_bucket_name != null ? [1] : []
