@@ -3,9 +3,9 @@
 [![Terraform Module](https://img.shields.io/badge/Terraform-Registry%20module-844FBA?logo=terraform&logoColor=ffffff)](https://registry.terraform.io/modules/stdapi-ai/stdapi-ai/aws/latest)
 [![OpenTofu Module](https://img.shields.io/badge/OpenTofu-Registry%20module-FFDA18?logo=opentofu&logoColor=ffffff)](https://search.opentofu.org/module/stdapi-ai/stdapi-ai/aws/latest)
 
-**Deploy an OpenAI, Anthropic & Cohere compatible AI gateway on AWS in minutes.** Production-ready ECS Fargate infrastructure with HTTPS, WAF, auto-scaling, and monitoring — all from a single Terraform module.
+**Deploy an OpenAI, Anthropic & Cohere compatible AI gateway on AWS.** ECS Fargate infrastructure with auto-scaling, private subnets, KMS encryption and least-privilege IAM by default; HTTPS, WAF, API key authentication and CloudWatch alarms are opt-in inputs — see [What this minimal configuration deploys](#minimal-deployment) and [What gets provisioned, and when](#what-gets-provisioned-and-when).
 
-🌐 [Documentation](https://stdapi.ai) · 🚀 [Start 14-Day Free Trial](https://stdapi.ai/operations_getting_started/) · 💻 [GitHub Repository](https://github.com/stdapi-ai/stdapi.ai)
+🌐 [Documentation](https://stdapi.ai) · 🚀 [Start 14-Day Free Trial](https://aws.amazon.com/marketplace/pp/prodview-su2dajk5zawpo) · 💻 [GitHub Repository](https://github.com/stdapi-ai/stdapi.ai)
 
 ## Quick Start
 
@@ -64,6 +64,14 @@ module "stdapi_ai" {
 ```
 
 For ready-to-deploy variants (single-region, EU/US multi-region, Open WebUI), see the [**samples repository**](https://github.com/stdapi-ai/samples). For deeper patterns (BYO VPC / ALB / Route 53 / S3, manual ECS, cost-optimized), see the [**advanced deployment guide**](https://stdapi.ai/operations_deploy_advanced/).
+
+## License and Cost
+
+stdapi.ai is dual-licensed: [**AGPL-3.0-or-later**](LICENSE-AGPL) for the free community container image, or a [**commercial license**](LICENSE-COMMERCIAL) obtained by subscribing on AWS Marketplace. **This module is commercial-only by construction** — it deploys the Marketplace ECR image, so an active Marketplace subscription is required. To run the AGPL community image instead, see the [local deployment guide](https://stdapi.ai/operations_getting_started_local/).
+
+The Marketplace license is metered at **$0.10 per container-hour**, with a **14-day free trial** on the license. `autoscaling_min_capacity` defaults to one task per availability zone and `availability_zones_count` defaults to all AZs in the region, so a default deployment in a 3-AZ region runs 3 tasks — about **$216/month in license** (720 h × $0.10 × 3), and about $432/month in a 6-AZ region such as `us-east-1`. Set `availability_zones_count` and `autoscaling_min_capacity` explicitly to control this.
+
+Only the license is covered by the trial. AWS resources this module creates (Fargate, ALB, NAT gateways, KMS, CloudWatch, S3) and Amazon Bedrock inference are billed by AWS from the first hour, with no markup. See the [cost management guide](https://stdapi.ai/operations_cost_management/) and the [licensing guide](https://stdapi.ai/operations_licensing/).
 
 ## Module Features
 
@@ -150,6 +158,11 @@ For integration against existing infrastructure and non-Terraform deployments, s
 | **[API Reference](https://stdapi.ai/api_overview/)** | OpenAI & Anthropic compatible API documentation |
 | **[Use Cases](https://stdapi.ai/use_cases/)** | Open WebUI, n8n, coding assistants, and more |
 | **[Features](https://stdapi.ai/features/)** | Full product capabilities |
+| **[Cost Management](https://stdapi.ai/operations_cost_management/)** | License metering, AWS resource costs, and per-request cost estimation |
+| **[Resilience & Failover](https://stdapi.ai/operations_resilience/)** | Multi-region routing, retry scope, and what does not fail over |
+| **[Licensing](https://stdapi.ai/operations_licensing/)** | AGPL-3.0 community edition vs the Marketplace commercial license |
+| **[Compliance](https://stdapi.ai/operations_compliance/)** | Data residency, region allow-lists, encryption, and outbound paths |
+| **[IAM Permissions](https://stdapi.ai/operations_iam_permissions/)** | Deployment and task-role permissions required by this module |
 
 ## AWS Qualified Software
 
@@ -492,7 +505,7 @@ All the options above are off by default and never required to pass a control in
 | <a name="input_container_insight"></a> [container\_insight](#input\_container\_insight) | Container insight configuration. Valid values: 'enhanced', 'enabled', 'disabled'. Default to 'enabled'. Security Hub: ECS.12 (ECS clusters should use Container Insights) — default 'enabled' = pass; setting 'disabled' fails this control. | `string` | `"enabled"` | no |
 | <a name="input_cors_allow_origins"></a> [cors\_allow\_origins](#input\_cors\_allow\_origins) | List of origins allowed to make cross-origin requests (CORS). Use ['*'] to allow all origins. Default to no CORS headers. | `list(string)` | `null` | no |
 | <a name="input_cost_price_overrides"></a> [cost\_price\_overrides](#input\_cost\_price\_overrides) | Unit price overrides for models not covered by the AWS Price List API, as a map of model IDs to dimension-name/price maps. | `map(map(number))` | `null` | no |
-| <a name="input_cost_tracking"></a> [cost\_tracking](#input\_cost\_tracking) | Enable real-time cost tracking from live AWS pricing (adds the pricing:GetProducts permission). Default to false. | `bool` | `null` | no |
+| <a name="input_cost_tracking"></a> [cost\_tracking](#input\_cost\_tracking) | Enable per-request cost estimation from AWS Price List values (adds the pricing:GetProducts permission). Reported costs are an estimate from published prices, not your actual AWS bill; use cost\_price\_overrides for models the Price List API does not cover. Default to false. | `bool` | `null` | no |
 | <a name="input_cpu"></a> [cpu](#input\_cpu) | ECS task CPU count. Valid values: 0.25, 0.5, 1, 2, 4, 8 & 16. Default of 0.25 vCPU is suitable for common use cases (text generation, embeddings). Increase for intensive workloads (multimodal requests, large LLM models). | `number` | `0.25` | no |
 | <a name="input_cpu_architecture"></a> [cpu\_architecture](#input\_cpu\_architecture) | CPU architecture. Valid values: 'X86\_64' or 'ARM64'. | `string` | `"ARM64"` | no |
 | <a name="input_default_model_params"></a> [default\_model\_params](#input\_default\_model\_params) | Default inference parameters applied to specific models automatically. JSON string format. | `string` | `null` | no |

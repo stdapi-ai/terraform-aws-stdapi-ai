@@ -559,7 +559,7 @@ variable "cloudwatch_metrics_namespace" {
 }
 
 variable "cost_tracking" {
-  description = "Enable real-time cost tracking from live AWS pricing (adds the pricing:GetProducts permission). Default to false."
+  description = "Enable per-request cost estimation from AWS Price List values (adds the pricing:GetProducts permission). Reported costs are an estimate from published prices, not your actual AWS bill; use cost_price_overrides for models the Price List API does not cover. Default to false."
   type        = bool
   default     = null
 }
