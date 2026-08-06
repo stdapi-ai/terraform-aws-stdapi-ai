@@ -59,8 +59,10 @@ locals {
 }
 
 module "vpc" {
-  source  = "JGoutin/vpc/aws"
-  version = "~> 1.3"
+  source = "JGoutin/vpc/aws"
+  # 1.4 is the first release whose ipv6_enabled reports the subnets rather than
+  # whether the module created them, which the dual-stack decisions below rely on.
+  version = "~> 1.4"
 
   name_prefix                                = local.name
   tags                                       = local.apn_tags

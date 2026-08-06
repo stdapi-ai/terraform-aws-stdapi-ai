@@ -625,7 +625,7 @@ variable "trusted_hosts" {
 }
 
 variable "proxy_trusted_hosts" {
-  description = "Trusted proxy hosts/IPs (CIDRs) whose X-Forwarded-* headers are honored when proxy headers are enabled. Restrict to your reverse proxy's IP range so direct clients cannot forge their source IP. When null and proxy headers are auto-enabled (var.alb_enabled and var.log_client_ip both true), defaults to the ALB subnet CIDRs so only the ALB is trusted; otherwise the server default ('*') applies."
+  description = "Trusted proxy hosts/IPs (CIDRs) whose X-Forwarded-* headers are honored when proxy headers are enabled. Restrict to your reverse proxy's IP range so direct clients cannot forge their source IP. Write entries in their natural address family: on an IPv6-enabled VPC the server binds a dual-stack socket and sees IPv4 peers in IPv4-mapped form, and the module adds the matching '::ffff:' range for every IPv4 entry automatically. When null and proxy headers are auto-enabled (var.alb_enabled and var.log_client_ip both true), defaults to the ALB subnet CIDRs so only the ALB is trusted; otherwise the server default ('*') applies."
   type        = list(string)
   default     = null
 }

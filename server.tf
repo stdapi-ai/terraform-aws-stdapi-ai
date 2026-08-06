@@ -85,6 +85,11 @@ module "server" {
           MCP_EXCLUDE_TOOLS                      = var.mcp_exclude_tools
           AWS_BEDROCK_REGION_ROUTING             = var.aws_bedrock_region_routing
           IMAGE_GENERATION_MODEL                 = var.image_generation_model
+          # Serve IPv6 as well as IPv4, from one dual-stack socket: with IPv6 on,
+          # service discovery publishes an AAAA record per task, and a client that
+          # resolves it first would otherwise get a connection refused. Left at the
+          # image default on IPv4-only VPCs, where no AAAA record exists.
+          GRANIAN_HOST = module.vpc.ipv6_enabled ? "::" : null
         } : k => v if v != null },
         { for k, v in {
           ENABLE_MCP_STREAMABLE_HTTP                             = var.enable_mcp_streamable_http
@@ -143,7 +148,7 @@ module "server" {
           AWS_BEDROCK_MODEL_REGION_RESTRICT = var.aws_bedrock_model_region_restrict
           AWS_BEDROCK_DEPRECATED_MODELS     = var.aws_bedrock_deprecated_models
           COST_PRICE_OVERRIDES              = var.cost_price_overrides
-          PROXY_TRUSTED_HOSTS               = var.proxy_trusted_hosts != null ? var.proxy_trusted_hosts : ((var.alb_enabled && var.log_client_ip == true) ? local.alb_subnets_cidr_blocks : null)
+          PROXY_TRUSTED_HOSTS               = local.proxy_trusted_hosts
         } : k => jsonencode(v) if v != null }
       )
       secrets = var.api_key != null || var.api_key_create ? {

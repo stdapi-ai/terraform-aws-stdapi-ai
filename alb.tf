@@ -14,6 +14,26 @@ locals {
     module.vpc.subnets_cidr_blocks, module.vpc.subnets_ipv6_cidr_blocks
   )
 
+  # Trusted peers, before the address families the server actually sees are covered.
+  proxy_trusted_hosts_declared = var.proxy_trusted_hosts != null ? var.proxy_trusted_hosts : (
+    (var.alb_enabled && var.log_client_ip == true) ? local.alb_subnets_cidr_blocks : null
+  )
+
+  # With IPv6 on, the server binds a dual-stack socket (GRANIAN_HOST below), and the
+  # kernel hands it an IPv4 peer as an IPv4-mapped address (::ffff:10.0.1.5). That
+  # belongs to no IPv4 network, so every IPv4 entry also needs its mapped equivalent
+  # (an IPv4 /16 is a /112 once the 96-bit mapping prefix is counted) or the ALB stops
+  # being a trusted peer and X-Forwarded-For is silently ignored.
+  proxy_trusted_hosts = (
+    local.proxy_trusted_hosts_declared == null || !module.vpc.ipv6_enabled
+    ? local.proxy_trusted_hosts_declared
+    : distinct(concat(local.proxy_trusted_hosts_declared, [
+      for host in local.proxy_trusted_hosts_declared :
+      "::ffff:${split("/", host)[0]}/${96 + tonumber(try(split("/", host)[1], "32"))}"
+      if can(regex("^[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+(/[0-9]{1,2})?$", host))
+    ]))
+  )
+
   # Shared logs bucket needed for ALB access logs and/or the main S3 bucket's server access logs.
   # Regional S3 buckets (storage_regional.tf) can't log here: S3 access log destinations must be in
   # the same Region as the source bucket, and this bucket isn't Region-pinned (it lives in the
