@@ -3,8 +3,11 @@ Server on ECS
 */
 
 module "server" {
-  source                            = "JGoutin/ecs-fargate/aws"
-  version                           = "~> 1.3"
+  source = "JGoutin/ecs-fargate/aws"
+  # 1.4 is the first release that deletes the Container Insights log group the ECS
+  # service-linked role recreates after the cluster is gone, and that redeploys the
+  # service when its capacity provider strategy or its secrets change.
+  version                           = "~> 1.4"
   tags                              = local.apn_tags
   kms_key_id                        = module.kms_key.id
   kms_policy_dependency             = module.kms_key.policy_dependency
