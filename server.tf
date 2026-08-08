@@ -163,8 +163,11 @@ module "server" {
           target_group_arns = var.alb_enabled ? [aws_lb_target_group.main[0].arn] : null
         }
       }
+      # ECS ignores the image's own HEALTHCHECK, so it is re-declared here. The
+      # probe derives its Host header from TRUSTED_HOSTS, which the server
+      # validates on /health like any other path.
       health_check = {
-        command      = ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:${local.port}/health', timeout=5)"]
+        command      = ["CMD", "python3", "-S", "-m", "stdapi.healthcheck"]
         interval     = 30
         timeout      = 5
         retries      = 3
