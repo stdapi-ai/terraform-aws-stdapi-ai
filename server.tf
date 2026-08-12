@@ -120,6 +120,7 @@ module "server" {
           MODEL_CACHE_SECONDS                                    = var.model_cache_seconds
           DROP_UNSUPPORTED_SYSTEM_PROMPT                         = var.drop_unsupported_system_prompt
           AWS_BEDROCK_ALLOW_GUARDRAIL_OVERRIDE                   = var.aws_bedrock_allow_guardrail_override
+          AWS_BEDROCK_ALLOW_SERVICE_TIER_OVERRIDE                = var.aws_bedrock_allow_service_tier_override
           ANTHROPIC_BETA_FILTER                                  = var.anthropic_beta_filter
           AWS_ADAPTIVE_RETRY                                     = var.aws_adaptive_retry
           AWS_MAX_POOL_CONNECTIONS                               = var.aws_max_pool_connections
@@ -491,6 +492,23 @@ data "aws_iam_policy_document" "server" {
       "polly:DescribeVoices"
     ]
     resources = ["*"]
+  }
+
+  # Polly - Long Input Synthesis (Only if S3 bucket available)
+  # Wildcard resource: GetSpeechSynthesisTask declares no resource type at all,
+  # and the only one StartSpeechSynthesisTask accepts is a lexicon ARN, which
+  # would restrict pronunciation lexicons rather than the tasks themselves.
+  # The synthesis output is confined by the S3 statements above.
+  dynamic "statement" {
+    for_each = local.s3_bucket_name != null || length(local.regional_buckets_combined) > 0 ? [1] : []
+    content {
+      sid = "PollyLongInputSynthesis"
+      actions = [
+        "polly:StartSpeechSynthesisTask",
+        "polly:GetSpeechSynthesisTask"
+      ]
+      resources = ["*"]
+    }
   }
 
   # Transcribe - Speech-to-Text (Only if S3 bucket available)

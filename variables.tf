@@ -389,6 +389,12 @@ variable "aws_bedrock_allow_guardrail_override" {
   default     = null
 }
 
+variable "aws_bedrock_allow_service_tier_override" {
+  description = "Allow users to select the service tier at request level, through the 'service_tier' request parameter or the X-Amzn-Bedrock-Service-Tier header. When disabled, a request cannot change the tier configured for the model by default_model_service_tiers or by the model alias it names. A model with no configured tier still honors the request in either case. Defaults to true."
+  type        = bool
+  default     = null
+}
+
 variable "anthropic_beta_filter" {
   description = "Enable filtering of unsupported anthropic_beta flags for Anthropic Claude models. When enabled, flags not in the allowlist are silently removed to prevent Bedrock ValidationException errors. Default to true."
   type        = bool
@@ -679,12 +685,26 @@ variable "model_aliases" {
     This is merged with default system aliases at startup.
     User-provided aliases take precedence over system defaults.
 
+    An alias maps either to a model ID, or to an object carrying that model plus
+    the configuration to apply to requests naming the alias: "service_tier",
+    "guardrail_id" with "guardrail_version" (and optionally "guardrail_trace"),
+    "metadata" and "extra_params". Those values override the equivalent
+    server-wide configuration, and a value sent with the request still wins
+    unless its override variable (aws_bedrock_allow_guardrail_override,
+    aws_bedrock_allow_service_tier_override) is disabled.
+
     Example: {
       "my-tts": "amazon.polly-neural",
-      "my-stt": "amazon.transcribe"
+      "my-stt": "amazon.transcribe",
+      "my-chat": {
+        "model": "amazon.nova-lite-v1:0",
+        "service_tier": "flex",
+        "metadata": { "team": "research" },
+        "extra_params": { "temperature": 0.2 }
+      }
     }
   EOT
-  type        = map(string)
+  type        = any
   default     = null
 }
 
