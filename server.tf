@@ -61,6 +61,10 @@ module "server" {
           AWS_BEDROCK_GUARDRAIL_VERSION          = var.aws_bedrock_guardrail_version
           AWS_BEDROCK_GUARDRAIL_TRACE            = var.aws_bedrock_guardrail_trace
           AWS_BEDROCK_SESSION_ENCRYPTION_KEY_ARN = var.aws_bedrock_session_encryption_key_arn
+          AWS_BEDROCK_USER_ROLE_ARN              = var.aws_bedrock_user_role_arn
+          AWS_BEDROCK_USER_ROLE_SESSION_DURATION = var.aws_bedrock_user_role_session_duration
+          AWS_BEDROCK_USER_ROLE_TAG_KEY          = var.aws_bedrock_user_role_tag_key
+          AWS_BEDROCK_USER_ROLE_REQUIRE_IDENTITY = var.aws_bedrock_user_role_require_identity
           AWS_TRANSCRIBE_REGION                  = var.aws_transcribe_region
           AWS_TRANSCRIBE_S3_BUCKET               = var.aws_transcribe_s3_bucket
           AWS_S3_TMP_PREFIX                      = var.aws_s3_tmp_prefix
@@ -74,6 +78,15 @@ module "server" {
           API_KEY_SSM_PARAMETER                  = var.api_key_ssm_parameter
           API_KEY_SECRETSMANAGER_SECRET          = var.api_key_secretsmanager_secret
           API_KEY_SECRETSMANAGER_KEY             = var.api_key_secretsmanager_key
+          AUTHENTICATION_MODE                    = var.authentication_mode
+          AWS_COGNITO_USER_POOL_ID               = var.aws_cognito_user_pool_id
+          AWS_COGNITO_CLIENT_IDS                 = var.aws_cognito_client_ids
+          AWS_COGNITO_REQUIRED_SCOPES            = var.aws_cognito_required_scopes
+          AWS_COGNITO_ACCEPT_ID_TOKEN            = var.aws_cognito_accept_id_token
+          AWS_COGNITO_ISSUER_TYPE                = var.aws_cognito_issuer_type
+          OAUTH_RESOURCE_IDENTIFIER              = var.oauth_resource_identifier
+          OAUTH_AUTHORIZATION_SERVERS            = var.oauth_authorization_servers
+          OAUTH_SCOPES_SUPPORTED                 = var.oauth_scopes_supported
           OTEL_SERVICE_NAME                      = var.otel_service_name
           OTEL_EXPORTER_ENDPOINT                 = var.otel_exporter_endpoint
           LOG_LEVEL                              = var.log_level
@@ -139,6 +152,8 @@ module "server" {
           AWS_BEDROCK_MANTLE_ENABLED                             = var.aws_bedrock_mantle_enabled
           AWS_BEDROCK_MANTLE_SERVICE_HEADER                      = var.aws_bedrock_mantle_service_header
           AWS_BEDROCK_ALLOW_MANTLE_PROJECT_OVERRIDE              = var.aws_bedrock_allow_mantle_project_override
+          AWS_BEDROCK_EXTERNAL_WEB_ACCESS                        = var.aws_bedrock_external_web_access
+          AWS_BEDROCK_ALLOW_EXTERNAL_WEB_ACCESS_OVERRIDE         = var.aws_bedrock_allow_external_web_access_override
           MAX_INPUT_FILE_SIZE                                    = var.max_input_file_size
           MAX_CONCURRENT_INPUT_DOWNLOADS                         = var.max_concurrent_input_downloads
         } : k => tostring(v) if v != null },
@@ -213,6 +228,7 @@ data "aws_iam_policy_document" "server" {
       "bedrock:CountTokens",
       "bedrock:GetAsyncInvoke",
       "bedrock:InvokeModel",
+      "bedrock:InvokeModelWithBidirectionalStream",
       "bedrock:InvokeModelWithResponseStream",
       "bedrock:InvokeTool",
       "bedrock:ListAsyncInvokes",
@@ -276,6 +292,22 @@ data "aws_iam_policy_document" "server" {
     sid       = "BedrockMantleBearerToken"
     actions   = ["bedrock-mantle:CallWithBearerToken"]
     resources = ["*"]
+  }
+
+  # Bedrock Web Search - Built-in grounding tool (Always Required; the tool only
+  # runs when a request asks for it). ExternalWebAccess is granted only when
+  # aws_bedrock_external_web_access is enabled: without it every search is
+  # answered from the in-AWS index and cache.
+  statement {
+    sid = "BedrockWebSearch"
+    actions = concat(
+      [
+        "bedrock-websearch:InvokeSearch",
+        "bedrock-websearch:InvokeFetch",
+      ],
+      var.aws_bedrock_external_web_access == true ? ["bedrock-websearch:ExternalWebAccess"] : [],
+    )
+    resources = ["arn:aws:bedrock-websearch:*:*:*"]
   }
 
   # Bedrock - Session Storage KMS encryption (Optional)
@@ -348,6 +380,22 @@ data "aws_iam_policy_document" "server" {
     sid       = "BedrockGuardrails"
     actions   = ["bedrock:ApplyGuardrail"]
     resources = ["arn:aws:bedrock:*:*:guardrail/*"]
+  }
+
+  # STS - Per-end-user cost attribution (Optional)
+  # Scoped to the single configured role: the server opens one session of it per
+  # end user. Tagging the session is a separate action from assuming the role,
+  # and the role's own trust policy must allow both.
+  dynamic "statement" {
+    for_each = var.aws_bedrock_user_role_arn != null ? [1] : []
+    content {
+      sid = "EndUserRoleSessions"
+      actions = [
+        "sts:AssumeRole",
+        "sts:TagSession",
+      ]
+      resources = [var.aws_bedrock_user_role_arn]
+    }
   }
 
   # Bedrock - Guardrail checks (Always Required)
@@ -485,10 +533,15 @@ data "aws_iam_policy_document" "server" {
   }
 
   # Polly - Text-to-Speech (Always Enabled)
+  # StartSpeechSynthesisStream serves input above the single-call limit with a
+  # generative voice, which needs no bucket. Like SynthesizeSpeech, the only
+  # resource type it accepts is a lexicon ARN, which would restrict
+  # pronunciation lexicons rather than the synthesis itself.
   statement {
     sid = "PollyTextToSpeech"
     actions = [
       "polly:SynthesizeSpeech",
+      "polly:StartSpeechSynthesisStream",
       "polly:DescribeVoices"
     ]
     resources = ["*"]

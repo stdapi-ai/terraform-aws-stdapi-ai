@@ -169,6 +169,52 @@ variable "aws_bedrock_allow_mantle_project_override" {
   default     = null
 }
 
+variable "aws_bedrock_user_role_arn" {
+  description = "ARN of an IAM role the server assumes once per end user, so AWS reports Amazon Bedrock model usage per end user in Cost Explorer and the Cost and Usage Report. The role's trust policy must allow this module's task role to call both 'sts:AssumeRole' and 'sts:TagSession' on it; this module grants the task role those two actions on this ARN. Default to none (all usage reported under the task role)."
+  type        = string
+  default     = null
+
+  validation {
+    condition     = var.aws_bedrock_user_role_arn == null || can(regex("^arn:aws(-[a-z]+)*:iam::[0-9]{12}:role/", var.aws_bedrock_user_role_arn))
+    error_message = "Must be an IAM role ARN, arn:<partition>:iam::<account-id>:role/<name>."
+  }
+}
+
+variable "aws_bedrock_user_role_session_duration" {
+  description = "Lifetime in seconds of a per-end-user role session obtained with aws_bedrock_user_role_arn, from 900 to 3600. The ceiling is imposed by AWS: a role session obtained from another role session cannot last longer than one hour. Default to 3600."
+  type        = number
+  default     = null
+
+  validation {
+    condition     = var.aws_bedrock_user_role_session_duration == null || try(var.aws_bedrock_user_role_session_duration >= 900 && var.aws_bedrock_user_role_session_duration <= 3600, false)
+    error_message = "Must be between 900 and 3600 seconds."
+  }
+}
+
+variable "aws_bedrock_user_role_tag_key" {
+  description = "Session tag key carrying the end user identity on per-end-user role sessions. Activate it as a cost allocation tag of type 'IAM principal' to group Bedrock costs per end user, and test it in IAM policies as 'aws:PrincipalTag/<key>'. Default to 'user'."
+  type        = string
+  default     = null
+}
+
+variable "aws_bedrock_user_role_require_identity" {
+  description = "If true, reject a model request that identifies no end user instead of running it under the server's own identity. Requires aws_bedrock_user_role_arn. Default to false."
+  type        = bool
+  default     = null
+}
+
+variable "aws_bedrock_external_web_access" {
+  description = "If true, let the built-in web search tool reach the public web instead of answering from the Amazon Bedrock web index and cache. Requires the 'bedrock-websearch:ExternalWebAccess' IAM permission, granted by this module when enabled. Default to false."
+  type        = bool
+  default     = null
+}
+
+variable "aws_bedrock_allow_external_web_access_override" {
+  description = "If true, allow clients to override aws_bedrock_external_web_access per request with the web search tool's 'external_web_access' field. When false, a request that sets a different value is rejected. Default to false."
+  type        = bool
+  default     = null
+}
+
 variable "aws_bedrock_region_routing" {
   description = "Automatic region routing strategy for Bedrock invocations. Distributes requests across configured regions to handle quota limits and regional unavailability. Strategies: 'disabled' (no routing), 'ordered' (try regions in configured order, default), 'lowest_latency' (prefer region with lowest measured latency), 'round_robin' (distribute evenly, incompatible with prompt caching). Requires at least 2 regions in aws_bedrock_regions."
   type        = string
@@ -436,6 +482,75 @@ variable "api_key_secretsmanager_key" {
   description = "Key name within the AWS Secrets Manager secret containing the API key. Only used when api_key_secretsmanager_secret is specified."
   type        = string
   default     = null
+}
+
+variable "oauth_resource_identifier" {
+  description = "Public URL clients use to reach the API, for example 'https://api.example.com', which is normally 'https://' followed by alb_domain_name. Setting it publishes an OAuth 2.0 protected resource metadata document at '/.well-known/oauth-protected-resource' and puts that address in the challenge every 401 response carries, so an AI agent can discover where to obtain a token. Must be the exact origin clients dial: scheme and host, no path, no trailing slash. Requires oauth_authorization_servers. If not specified, nothing is published."
+  type        = string
+  default     = null
+}
+
+variable "oauth_authorization_servers" {
+  description = "Issuer URLs of the OAuth 2.0 authorization servers that issue tokens for the API, as a comma-separated list, published in the protected resource metadata. An Amazon Cognito user pool issues 'https://cognito-idp.<region>.amazonaws.com/<pool-id>'. Required when oauth_resource_identifier is specified."
+  type        = string
+  default     = null
+}
+
+variable "oauth_scopes_supported" {
+  description = "OAuth 2.0 scopes a token needs to call the API, as a comma-separated list, advertised in the protected resource metadata and in the 401 challenge. Requires oauth_resource_identifier. If not specified, no scope is advertised."
+  type        = string
+  default     = null
+}
+
+variable "authentication_mode" {
+  description = "Which client authentication methods this deployment accepts: 'any' for every method that is configured, 'api_key' for the API key only, or 'cognito' for Amazon Cognito user pool tokens only. The value asserts the intended security posture: the server fails to start when the selected method is not configured, and when a method that would be ignored is configured anyway, so a credential is never accepted or silently refused by accident. Default to 'any'."
+  type        = string
+  default     = null
+
+  validation {
+    condition     = var.authentication_mode == null || contains(["any", "api_key", "cognito"], coalesce(var.authentication_mode, "any"))
+    error_message = "Must be one of 'any', 'api_key' or 'cognito'."
+  }
+}
+
+variable "aws_cognito_user_pool_id" {
+  description = "Identifier of the Amazon Cognito user pool whose tokens authenticate clients, for example 'eu-west-3_a1b2c3d4e'. Clients send a pool access token in the 'Authorization: Bearer <token>' header; its signature, issuer, expiry, application and scopes are validated on every request. The identifier is prefixed by the pool's AWS Region, which is where the signing keys are read from. Requires aws_cognito_client_ids. Default to none (user pool authentication disabled)."
+  type        = string
+  default     = null
+
+  validation {
+    condition     = var.aws_cognito_user_pool_id == null || can(regex("^[a-z]{2}(-[a-z]+)+-[0-9]_[A-Za-z0-9]+$", var.aws_cognito_user_pool_id))
+    error_message = "Must be a Cognito user pool ID, <region>_<suffix>."
+  }
+}
+
+variable "aws_cognito_client_ids" {
+  description = "Amazon Cognito user pool application client IDs whose tokens are accepted, as a comma-separated list. A token issued to any other application is rejected. Required when aws_cognito_user_pool_id is specified."
+  type        = string
+  default     = null
+}
+
+variable "aws_cognito_required_scopes" {
+  description = "OAuth 2.0 scopes a token must all carry to be accepted, as a comma-separated list. Custom scopes exist only on tokens obtained from the user pool's OAuth 2.0 token endpoint, which requires a resource server and a pool domain; tokens obtained by signing in with a username and password carry only 'aws.cognito.signin.user.admin', so requiring a custom scope rejects them. Default to none (any scope set is accepted)."
+  type        = string
+  default     = null
+}
+
+variable "aws_cognito_accept_id_token" {
+  description = "If true, accept Amazon Cognito identity tokens in addition to access tokens. Identity tokens describe the signed-in user rather than granting API access, and carry no scopes; enable only for clients that cannot obtain an access token. Default to false."
+  type        = bool
+  default     = null
+}
+
+variable "aws_cognito_issuer_type" {
+  description = "Issuer configuration of the Amazon Cognito user pool, which decides the issuer URL its tokens carry: 'original' for 'https://cognito-idp.<region>.amazonaws.com/<pool-id>', or 'updated' for 'https://issuer-cognito-idp.<region>.amazonaws.com/<pool-id>', available on the Essentials and Plus pool tiers. Tokens whose issuer does not match are rejected, so this must match the pool's own setting. Default to 'original'."
+  type        = string
+  default     = null
+
+  validation {
+    condition     = var.aws_cognito_issuer_type == null || contains(["original", "updated"], coalesce(var.aws_cognito_issuer_type, "original"))
+    error_message = "Must be either 'original' or 'updated'."
+  }
 }
 
 variable "ecs_task_role_policy_arns" {
