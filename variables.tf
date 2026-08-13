@@ -554,19 +554,19 @@ variable "api_key_secretsmanager_key" {
 }
 
 variable "oauth_resource_identifier" {
-  description = "Public URL clients use to reach the API, for example 'https://api.example.com', which is normally 'https://' followed by alb_domain_name. Setting it publishes an OAuth 2.0 protected resource metadata document at '/.well-known/oauth-protected-resource' and puts that address in the challenge every 401 response carries, so an AI agent can discover where to obtain a token. Must be the exact origin clients dial: scheme and host, no path, no trailing slash. Requires oauth_authorization_servers. If not specified, nothing is published."
+  description = "Public URL clients use to reach the API, for example 'https://api.example.com', which is normally 'https://' followed by alb_domain_name. Setting it publishes an OAuth 2.0 protected resource metadata document at '/.well-known/oauth-protected-resource' and puts that address in the challenge every 401 response carries, so an AI agent can discover where to obtain a token. Must be the exact origin clients dial: scheme and host, no path, no trailing slash. Requires either aws_cognito_user_pool_id, whose issuer is then published, or an explicit oauth_authorization_servers. If not specified, nothing is published."
   type        = string
   default     = null
 }
 
 variable "oauth_authorization_servers" {
-  description = "Issuer URLs of the OAuth 2.0 authorization servers that issue tokens for the API, as a comma-separated list, published in the protected resource metadata. An Amazon Cognito user pool issues 'https://cognito-idp.<region>.amazonaws.com/<pool-id>'. Required when oauth_resource_identifier is specified."
+  description = "Issuer URLs of the OAuth 2.0 authorization servers that issue tokens for the API, as a comma-separated list, published in the protected resource metadata. Leave it unset when aws_cognito_user_pool_id is specified: the pool's own issuer is published, resolved for the partition the pool lives in. Setting it explicitly is for a deployment that accepts tokens from another authorization server, and the list must still name the configured pool's issuer. Required only when no user pool is configured and oauth_resource_identifier is."
   type        = string
   default     = null
 }
 
 variable "oauth_scopes_supported" {
-  description = "OAuth 2.0 scopes a token needs to call the API, as a comma-separated list, advertised in the protected resource metadata and in the 401 challenge. Requires oauth_resource_identifier. If not specified, no scope is advertised."
+  description = "OAuth 2.0 scopes a token needs to call the API, as a comma-separated list, advertised in the protected resource metadata and in the 401 challenge. Requires oauth_resource_identifier. If not specified, aws_cognito_required_scopes is advertised, so the scopes a token needs are declared in one place."
   type        = string
   default     = null
 }
