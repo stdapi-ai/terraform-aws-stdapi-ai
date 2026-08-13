@@ -399,6 +399,52 @@ variable "aws_s3_videos_expires_after" {
   default     = null
 }
 
+variable "aws_s3_vector_stores_prefix" {
+  description = "S3 prefix (folder path) in the general purpose bucket for the Vector Stores API's own records — the stores, their attached files and their file batches. Default to 'vector_stores/'."
+  type        = string
+  default     = null
+}
+
+variable "aws_s3_vectors_bucket_create" {
+  description = "If true, create an S3 vector bucket backing the Vector Stores API. Only used when aws_s3_vectors_bucket is not specified. When aws_s3_vectors_bucket is specified, this value is ignored. Default to false (Vector Stores API disabled)."
+  type        = bool
+  default     = false
+}
+
+variable "aws_s3_vectors_bucket" {
+  description = "Existing Amazon S3 vector bucket name backing the Vector Stores API. A vector bucket is a distinct resource type from a general purpose bucket. When specified, takes precedence over aws_s3_vectors_bucket_create. Default to none, meaning a bucket is created when aws_s3_vectors_bucket_create is true, and the Vector Stores API is disabled otherwise."
+  type        = string
+  default     = null
+}
+
+variable "aws_s3_vectors_region" {
+  description = <<-EOT
+    AWS region holding the vector bucket. A vector bucket is a regional resource and its indexes are only reachable in that region, so this setting has no failover. Default to the region this module is deployed in.
+
+    Amazon S3 Vectors is not available in every region: see [AWS Regions, endpoints, and quotas for S3 Vectors](https://docs.aws.amazon.com/AmazonS3/latest/userguide/s3-vectors-regions-quotas.html).
+  EOT
+  type        = string
+  default     = null
+
+  validation {
+    condition = var.aws_s3_vectors_region == null || contains([
+      "af-south-1", "ap-east-1", "ap-east-2", "ap-northeast-1", "ap-northeast-2", "ap-northeast-3",
+      "ap-south-1", "ap-south-2", "ap-southeast-1", "ap-southeast-2", "ap-southeast-3",
+      "ap-southeast-4", "ap-southeast-5", "ap-southeast-6", "ap-southeast-7", "ca-central-1",
+      "ca-west-1", "eu-central-1", "eu-central-2", "eu-north-1", "eu-south-1", "eu-south-2",
+      "eu-west-1", "eu-west-2", "eu-west-3", "eusc-de-east-1", "mx-central-1", "sa-east-1",
+      "us-east-1", "us-east-2", "us-gov-east-1", "us-gov-west-1", "us-west-1", "us-west-2",
+    ], var.aws_s3_vectors_region)
+    error_message = "Amazon S3 Vectors is not available in var.aws_s3_vectors_region."
+  }
+}
+
+variable "aws_s3_vectors_kms_key_arn" {
+  description = "KMS key ARN encrypting the vector bucket specified in aws_s3_vectors_bucket. Required to grant the server permission to use an SSE-KMS encrypted vector bucket. When using aws_s3_vectors_bucket_create = true, a key is created automatically and does not need to be specified here."
+  type        = string
+  default     = null
+}
+
 variable "aws_translate_region" {
   description = "AWS region for Translate text translation service. Default to every var.aws_bedrock_regions region as a failover candidate, or the current region."
   type        = string

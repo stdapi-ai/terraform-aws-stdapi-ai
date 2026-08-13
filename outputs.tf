@@ -51,6 +51,18 @@ output "regional_buckets" {
   value       = local.regional_buckets_combined
 }
 
+# Vector Stores API configuration
+
+output "vectors_bucket_name" {
+  description = "S3 vector bucket name backing the Vector Stores API, or null when it is disabled."
+  value       = local.s3_vectors_bucket_name
+}
+
+output "vectors_region" {
+  description = "Region holding the S3 vector bucket, or null when the Vector Stores API is disabled."
+  value       = local.s3_vectors_bucket_name != null ? local.s3_vectors_region : null
+}
+
 # Other outputs that may be required by the user
 
 output "api_key" {

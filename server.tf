@@ -70,6 +70,9 @@ module "server" {
           AWS_S3_TMP_PREFIX                      = var.aws_s3_tmp_prefix
           AWS_S3_FILES_PREFIX                    = var.aws_s3_files_prefix
           AWS_S3_VIDEOS_PREFIX                   = var.aws_s3_videos_prefix
+          AWS_S3_VECTOR_STORES_PREFIX            = var.aws_s3_vector_stores_prefix
+          AWS_S3_VECTORS_BUCKET                  = local.s3_vectors_bucket_name
+          AWS_S3_VECTORS_REGION                  = local.s3_vectors_bucket_name != null ? local.s3_vectors_region : null
           AWS_TRANSLATE_REGION                   = var.aws_translate_region
           TIMEZONE                               = var.timezone
           OPENAI_ROUTES_PREFIX                   = var.openai_routes_prefix
@@ -528,6 +531,47 @@ data "aws_iam_policy_document" "server" {
         test     = "StringLike"
         variable = "kms:ViaService"
         values   = ["s3.*.amazonaws.com"]
+      }
+    }
+  }
+
+  # S3 Vectors - Vector Stores API (Optional)
+  # The gateway never creates or deletes the vector bucket, only the indexes inside it, so no
+  # bucket-level create or delete action is granted. The stores' own records are JSON objects in
+  # the general purpose bucket, covered by the S3 File Storage statements above.
+  dynamic "statement" {
+    for_each = local.s3_vectors_bucket_name != null ? [1] : []
+    content {
+      sid = "VectorStoreIndexes"
+      actions = [
+        "s3vectors:CreateIndex",
+        "s3vectors:DeleteIndex",
+        "s3vectors:PutVectors",
+        "s3vectors:GetVectors",
+        "s3vectors:QueryVectors",
+        "s3vectors:DeleteVectors",
+      ]
+      resources = [
+        "arn:aws:s3vectors:${local.s3_vectors_region}:${data.aws_caller_identity.current.account_id}:bucket/${local.s3_vectors_bucket_name}",
+        "arn:aws:s3vectors:${local.s3_vectors_region}:${data.aws_caller_identity.current.account_id}:bucket/${local.s3_vectors_bucket_name}/index/*",
+      ]
+    }
+  }
+
+  # KMS - Vector Bucket Encryption (Optional)
+  dynamic "statement" {
+    for_each = local.s3_vectors_bucket_name != null && local.s3_vectors_kms_key_arn != null ? [1] : []
+    content {
+      sid = "KMSVectorBucket"
+      actions = [
+        "kms:Decrypt",
+        "kms:GenerateDataKey"
+      ]
+      resources = [local.s3_vectors_kms_key_arn]
+      condition {
+        test     = "StringEquals"
+        variable = "kms:ViaService"
+        values   = ["s3vectors.${local.s3_vectors_region}.amazonaws.com"]
       }
     }
   }
