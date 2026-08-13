@@ -51,7 +51,7 @@ output "regional_buckets" {
   value       = local.regional_buckets_combined
 }
 
-# Vector Stores API configuration
+# Vector Stores & Batch API configuration
 
 output "vectors_bucket_name" {
   description = "S3 vector bucket name backing the Vector Stores API, or null when it is disabled."
@@ -61,6 +61,11 @@ output "vectors_bucket_name" {
 output "vectors_region" {
   description = "Region holding the S3 vector bucket, or null when the Vector Stores API is disabled."
   value       = local.s3_vectors_bucket_name != null ? local.s3_vectors_region : null
+}
+
+output "bedrock_batch_role_arn" {
+  description = "ARN of the IAM service role Amazon Bedrock assumes to run batch inference jobs, or null when the Batch API is disabled."
+  value       = local.bedrock_batch_role_arn
 }
 
 # Other outputs that may be required by the user

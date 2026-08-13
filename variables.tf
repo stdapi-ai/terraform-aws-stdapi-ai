@@ -399,6 +399,29 @@ variable "aws_s3_videos_expires_after" {
   default     = null
 }
 
+variable "aws_s3_batches_prefix" {
+  description = "S3 prefix (folder path) for the Batch API's own data — the submitted requests, the results and the batch records themselves. Each batch stores its data under a folder of its own below this prefix, in the bucket that served it, and the batch service role is granted access to this prefix alone. Must not be the bucket root. Default to 'batches/'."
+  type        = string
+  default     = null
+}
+
+variable "aws_bedrock_batch_role_create" {
+  description = "If true, create the IAM service role Amazon Bedrock assumes to run batch inference jobs, allowed to read the submitted requests and write the results under aws_s3_batches_prefix in the module-managed buckets, and to invoke foundation models and inference profiles. Only used when aws_bedrock_batch_role_arn is not specified. When aws_bedrock_batch_role_arn is specified, this value is ignored. Default to false (Batch API disabled)."
+  type        = bool
+  default     = false
+}
+
+variable "aws_bedrock_batch_role_arn" {
+  description = "ARN of an existing IAM service role Amazon Bedrock assumes to run batch inference jobs. Its trust policy must allow 'bedrock.amazonaws.com' to assume it, and it must be able to read and write every bucket the server may use, under aws_s3_batches_prefix; this module grants the task role 'iam:PassRole' on this ARN alone, for Amazon Bedrock only. When specified, takes precedence over aws_bedrock_batch_role_create. Default to none, meaning a role is created when aws_bedrock_batch_role_create is true, and the Batch API is disabled otherwise."
+  type        = string
+  default     = null
+
+  validation {
+    condition     = var.aws_bedrock_batch_role_arn == null || can(regex("^arn:aws(-[a-z]+)*:iam::[0-9]{12}:role/", var.aws_bedrock_batch_role_arn))
+    error_message = "Must be an IAM role ARN, arn:<partition>:iam::<account-id>:role/<name>."
+  }
+}
+
 variable "aws_s3_vector_stores_prefix" {
   description = "S3 prefix (folder path) in the general purpose bucket for the Vector Stores API's own records — the stores, their attached files and their file batches. Default to 'vector_stores/'."
   type        = string

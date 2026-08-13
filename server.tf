@@ -70,6 +70,8 @@ module "server" {
           AWS_S3_TMP_PREFIX                      = var.aws_s3_tmp_prefix
           AWS_S3_FILES_PREFIX                    = var.aws_s3_files_prefix
           AWS_S3_VIDEOS_PREFIX                   = var.aws_s3_videos_prefix
+          AWS_S3_BATCHES_PREFIX                  = var.aws_s3_batches_prefix
+          AWS_BEDROCK_BATCH_ROLE_ARN             = local.bedrock_batch_role_arn
           AWS_S3_VECTOR_STORES_PREFIX            = var.aws_s3_vector_stores_prefix
           AWS_S3_VECTORS_BUCKET                  = local.s3_vectors_bucket_name
           AWS_S3_VECTORS_REGION                  = local.s3_vectors_bucket_name != null ? local.s3_vectors_region : null
@@ -325,6 +327,41 @@ data "aws_iam_policy_document" "server" {
         "kms:GenerateDataKey",
       ]
       resources = [var.aws_bedrock_session_encryption_key_arn]
+    }
+  }
+
+  # Bedrock - Batch Inference (Optional)
+  # The server submits, polls and cancels its own jobs; Amazon Bedrock runs them under the batch
+  # service role, so the models are invoked by that role and not by this one. The submitted
+  # requests and the results are S3 objects, covered by the S3 File Storage statements above.
+  dynamic "statement" {
+    for_each = local.bedrock_batch_role_arn != null ? [1] : []
+    content {
+      sid = "BedrockBatchJobs"
+      actions = [
+        "bedrock:CreateModelInvocationJob",
+        "bedrock:GetModelInvocationJob",
+        "bedrock:StopModelInvocationJob",
+      ]
+      resources = ["arn:aws:bedrock:*:${data.aws_caller_identity.current.account_id}:model-invocation-job/*"]
+    }
+  }
+
+  # IAM - Batch Service Role Hand-Off (Optional)
+  # Creating a job hands the service role to Amazon Bedrock, which requires iam:PassRole. Scoped to
+  # that one role and to that one service: a wider grant would let the task role hand any role it
+  # can name to Amazon Bedrock and inherit its permissions.
+  dynamic "statement" {
+    for_each = local.bedrock_batch_role_arn != null ? [1] : []
+    content {
+      sid       = "BedrockBatchPassRole"
+      actions   = ["iam:PassRole"]
+      resources = [local.bedrock_batch_role_arn]
+      condition {
+        test     = "StringEquals"
+        variable = "iam:PassedToService"
+        values   = ["bedrock.amazonaws.com"]
+      }
     }
   }
 
