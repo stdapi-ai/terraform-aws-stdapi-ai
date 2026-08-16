@@ -181,6 +181,7 @@ module "server" {
           AWS_S3_ACCEPTED_BUCKETS           = var.aws_s3_accepted_buckets
           AWS_BEDROCK_MODEL_REGION_RESTRICT = var.aws_bedrock_model_region_restrict
           AWS_BEDROCK_DEPRECATED_MODELS     = var.aws_bedrock_deprecated_models
+          AWS_TRANSCRIBE_STREAM_LANGUAGES   = var.aws_transcribe_stream_languages
           COST_PRICE_OVERRIDES              = var.cost_price_overrides
           PROXY_TRUSTED_HOSTS               = local.proxy_trusted_hosts
         } : k => jsonencode(v) if v != null }
@@ -713,7 +714,8 @@ data "aws_iam_policy_document" "server" {
       actions = [
         "transcribe:StartTranscriptionJob",
         "transcribe:GetTranscriptionJob",
-        "transcribe:DeleteTranscriptionJob"
+        "transcribe:DeleteTranscriptionJob",
+        "transcribe:StartStreamTranscription"
       ]
       resources = ["*"]
     }

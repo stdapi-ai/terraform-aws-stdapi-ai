@@ -381,6 +381,12 @@ variable "aws_transcribe_s3_bucket" {
   default     = null
 }
 
+variable "aws_transcribe_stream_languages" {
+  description = "Languages a streamed transcription (stream=true) picks between when the request names none, as two or more language codes, for example ['en-US', 'es-US', 'fr-FR']. A streamed transcription starts before the recording has been fully read, which requires knowing which languages to expect. Default to none, meaning a request naming no language is transcribed once the whole recording has been read, and its language detected."
+  type        = list(string)
+  default     = null
+}
+
 variable "aws_transcribe_output_encryption_key_arn" {
   description = "KMS key ARN encrypting the transcription job output written to aws_transcribe_s3_bucket. The key must be usable from every region a transcription job can be served from; this module grants the task role kms:GenerateDataKey and kms:Decrypt on it, and the key policy must allow the same actions. Default to the bucket's own default encryption."
   type        = string
