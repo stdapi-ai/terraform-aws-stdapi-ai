@@ -76,6 +76,7 @@ module "server" {
           AWS_S3_VECTOR_STORES_PREFIX              = var.aws_s3_vector_stores_prefix
           AWS_S3_VECTORS_BUCKET                    = local.s3_vectors_bucket_name
           AWS_S3_VECTORS_REGION                    = local.s3_vectors_bucket_name != null ? local.s3_vectors_region : null
+          AWS_BEDROCK_KNOWLEDGE_BASE_IDS           = length(var.aws_bedrock_knowledge_base_ids) > 0 ? join(",", var.aws_bedrock_knowledge_base_ids) : null
           AWS_TRANSLATE_REGION                     = var.aws_translate_region
           TIMEZONE                                 = var.timezone
           OPENAI_ROUTES_PREFIX                     = var.openai_routes_prefix
@@ -642,6 +643,33 @@ data "aws_iam_policy_document" "server" {
         variable = "kms:ViaService"
         values   = ["s3vectors.${local.s3_vectors_region}.amazonaws.com"]
       }
+    }
+  }
+
+  # Bedrock - Knowledge Base Vector Stores (Optional)
+  # The knowledge base is the customer's, so no create, update or delete action on it is granted,
+  # only the documents of its data source. bedrock:ListKnowledgeBases is deliberately absent: the
+  # server never discovers a knowledge base it was not given, so only the allowlisted ones are
+  # ever addressed.
+  dynamic "statement" {
+    for_each = length(var.aws_bedrock_knowledge_base_ids) > 0 ? [1] : []
+    content {
+      sid = "BedrockKnowledgeBaseVectorStores"
+      actions = [
+        "bedrock:GetKnowledgeBase",
+        "bedrock:Retrieve",
+        "bedrock:ListDataSources",
+        "bedrock:IngestKnowledgeBaseDocuments",
+        "bedrock:ListKnowledgeBaseDocuments",
+        "bedrock:GetKnowledgeBaseDocuments",
+        "bedrock:DeleteKnowledgeBaseDocuments",
+      ]
+      # The knowledge base is read in the first Bedrock region. An entry may name its data source
+      # as '<knowledgeBaseId>/<dataSourceId>', which is not part of the knowledge base ARN.
+      resources = [
+        for entry in var.aws_bedrock_knowledge_base_ids :
+        "arn:aws:bedrock:${local.candidate_regions[0]}:${data.aws_caller_identity.current.account_id}:knowledge-base/${split("/", entry)[0]}"
+      ]
     }
   }
 

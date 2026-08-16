@@ -508,6 +508,20 @@ variable "vector_store_chunk_overlap_tokens" {
   }
 }
 
+variable "aws_bedrock_knowledge_base_ids" {
+  description = <<-EOT
+    Allowlist of Amazon Bedrock knowledge bases served through the Vector Stores API. Each allowlisted knowledge base is addressed as the vector store `vs_kb_<knowledgeBaseId>` on every `/v1/vector_stores` endpoint and is listed alongside the stores the server owns: searching runs against it, attaching a file ingests a document, listing and reading files report its documents back, and deleting a file deletes the document.
+
+    Write each entry as `<knowledgeBaseId>`, or as `<knowledgeBaseId>/<dataSourceId>` when the knowledge base has more than one data source; with a single data source the server resolves it itself. For example `["ABCDE12345", "FGHIJ67890/KLMNO13579"]`. Each knowledge base must live in the first `aws_bedrock_regions` region, which is the region this module grants access to it in.
+
+    The knowledge base stays yours: this module never creates or deletes one, and the task role is granted no action that would reshape it, only `bedrock:Retrieve` and the document actions of its data source, on the ARN of each listed knowledge base.
+
+    Default to an empty list, which grants no permission on any knowledge base and makes none of them addressable: a `vs_kb_...` identifier is then answered exactly as an unknown vector store is.
+  EOT
+  type        = list(string)
+  default     = []
+}
+
 variable "aws_translate_region" {
   description = "AWS region for Translate text translation service. Default to every var.aws_bedrock_regions region as a failover candidate, or the current region."
   type        = string
