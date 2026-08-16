@@ -36,6 +36,32 @@ resource "random_password" "api_key" {
   special = false
 }
 
+# Realtime API client secret signing key
+
+locals {
+  # The server derives the key from the API key, and falls back to a per-process
+  # random value when no API key is configured, which makes an ephemeral client
+  # secret minted by one task fail on any other task. Generate one instead, so
+  # the key survives scaling out and task replacement.
+  create_realtime_client_secret_key = (
+    var.realtime_client_secret_key == null &&
+    var.api_key == null &&
+    !var.api_key_create &&
+    var.api_key_ssm_parameter == null &&
+    var.api_key_secretsmanager_secret == null
+  )
+
+  realtime_client_secret_key = var.realtime_client_secret_key != null ? var.realtime_client_secret_key : (
+    local.create_realtime_client_secret_key ? random_password.realtime_client_secret_key[0].result : null
+  )
+}
+
+resource "random_password" "realtime_client_secret_key" {
+  count   = local.create_realtime_client_secret_key ? 1 : 0
+  length  = 64
+  special = false
+}
+
 data "aws_iam_policy_document" "log_kms_policy" {
   statement {
     sid = "Allow ${local.name} applications logs"

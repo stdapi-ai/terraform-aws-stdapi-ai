@@ -91,6 +91,12 @@ variable "aws_bedrock_allow_prompt_router_arn" {
   default     = null
 }
 
+variable "aws_bedrock_allow_prompt_arn" {
+  description = "If true, allow users to reference an Amazon Bedrock Prompt Management prompt ARN in the OpenAI Responses API 'prompt.id' parameter, for example 'arn:aws:bedrock:us-east-1:123456789012:prompt/ABCDE12345:1'. The prompt template is rendered by Amazon Bedrock and its variables are filled from 'prompt.variables'. Setting it to true also grants the task role bedrock:GetPrompt and bedrock:RenderPrompt on every prompt of the account. Default to false, which rejects any 'prompt' parameter with a 400 error."
+  type        = bool
+  default     = null
+}
+
 variable "aws_bedrock_model_arn_mapping" {
   description = <<-EOT
     Map standard model IDs to custom inference profile or prompt router ARNs. This allows server administrators to override the default cross-region inference profiles with custom application inference profiles, cross-region inference profiles, or prompt routers.
@@ -474,6 +480,34 @@ variable "aws_s3_vectors_kms_key_arn" {
   default     = null
 }
 
+variable "vector_store_embedding_model" {
+  description = "Model used to embed the files indexed into a vector store, and the queries searched against them. The model is frozen on each store when it is created, so changing it only affects stores created afterwards; existing stores keep answering with the model they were created with. Default to 'amazon.titan-embed-text-v2:0'."
+  type        = string
+  default     = null
+}
+
+variable "vector_store_chunk_size_tokens" {
+  description = "Default chunk size, in tokens, for files indexed into a vector store without an explicit chunking_strategy; a request's own chunking_strategy always wins. Tokens are approximated from the text length, and a chunk is additionally capped by what the embedding model accepts in one input. Default to 800."
+  type        = number
+  default     = null
+
+  validation {
+    condition     = var.vector_store_chunk_size_tokens == null || (var.vector_store_chunk_size_tokens >= 100 && var.vector_store_chunk_size_tokens <= 4096)
+    error_message = "Must be between 100 and 4096 tokens."
+  }
+}
+
+variable "vector_store_chunk_overlap_tokens" {
+  description = "Default number of tokens shared between consecutive chunks, for files indexed into a vector store without an explicit chunking_strategy. Must not exceed half of vector_store_chunk_size_tokens, which the server checks on startup. Default to 400."
+  type        = number
+  default     = null
+
+  validation {
+    condition     = var.vector_store_chunk_overlap_tokens == null || var.vector_store_chunk_overlap_tokens >= 0
+    error_message = "Must not be negative."
+  }
+}
+
 variable "aws_translate_region" {
   description = "AWS region for Translate text translation service. Default to every var.aws_bedrock_regions region as a failover candidate, or the current region."
   type        = string
@@ -690,6 +724,18 @@ variable "strict_input_validation" {
   default     = null
 }
 
+variable "extra_model_params_drop_all" {
+  description = "If true, disable the 'extra model parameters' passthrough entirely: no undeclared request field is ever forwarded to Amazon Bedrock as a provider-specific inference parameter, on any route that supports it. Overrides extra_model_params_denylist, which no longer matters once nothing is forwarded. Default to false, which keeps the passthrough, filtered by the built-in default denylist and extra_model_params_denylist."
+  type        = bool
+  default     = null
+}
+
+variable "extra_model_params_denylist" {
+  description = "Additional parameter names to strip from the 'extra model parameters' passthrough, as a comma-separated list. Merged with the built-in default denylist of client-control parameters (such as 'drop_params', 'api_key' or 'custom_llm_provider') that some OpenAI-SDK-based clients leak into extra_body and that are never legitimate Bedrock model parameters. Only effective when extra_model_params_drop_all is false. Default to the built-in denylist alone. Example: 'x_internal_debug_flag,x_proxy_trace_id'"
+  type        = string
+  default     = null
+}
+
 variable "default_model_params" {
   description = "Default inference parameters applied to specific models automatically. JSON string format."
   type        = string
@@ -786,6 +832,12 @@ variable "enable_openapi_json" {
 
 variable "enable_mcp_streamable_http" {
   description = "Enable the MCP (Model Context Protocol) server using Streamable HTTP transport. When enabled, exposes an MCP-compatible endpoint at /mcp. This is the recommended MCP transport. Default to false."
+  type        = bool
+  default     = null
+}
+
+variable "mcp_stateless_http" {
+  description = "Serve the MCP Streamable HTTP transport in stateless mode. Each request is then handled by a fresh transport that keeps no session state, so any client may call /mcp without initializing a session first and any task may serve any request. Required by hosts that provide their own session isolation and inject an 'Mcp-Session-Id' header the server never issued. Requires enable_mcp_streamable_http. Default to false."
   type        = bool
   default     = null
 }
@@ -901,6 +953,23 @@ variable "model_aliases" {
 variable "image_generation_model" {
   description = "Default model ID for image generation (e.g. 'amazon.nova-canvas-v1:0'). Required unless the client or the LLM specifies a model per call."
   type        = string
+  default     = null
+}
+
+variable "realtime_client_secret_key" {
+  description = <<-EOT
+    Secret the ephemeral client secrets of the Realtime API are signed with. Any value works as long as every task of the deployment shares it: a secret minted by one task is verified by whichever one the client's WebSocket reaches. Passed to the container as an ECS secret stored in AWS Systems Manager Parameter Store, never as a plain environment variable.
+
+    When not specified, the server derives the key from the configured API key. When no API key is configured either (api_key, api_key_create, api_key_ssm_parameter and api_key_secretsmanager_secret all unset), the module generates a key and stores it the same way, because the server would otherwise fall back to a per-process random value, under which a client secret minted by one task is rejected by every other task and by any task replacing it after a deployment.
+  EOT
+  type        = string
+  sensitive   = true
+  default     = null
+}
+
+variable "realtime_allow_session_override" {
+  description = "Allow a client connecting to the Realtime API with an ephemeral client secret to override the session configuration that secret carries. When disabled, the model, the instructions and the output token cap minted into the secret are final: a 'model' query parameter naming another model is refused, and a session.update changing one of them answers an error. Default to true, which is the upstream behavior; disable it in a multi-tenant deployment where the secret is the only thing constraining an untrusted client."
+  type        = bool
   default     = null
 }
 

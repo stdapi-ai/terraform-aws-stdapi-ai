@@ -107,6 +107,8 @@ module "server" {
           MCP_EXCLUDE_TOOLS                        = var.mcp_exclude_tools
           AWS_BEDROCK_REGION_ROUTING               = var.aws_bedrock_region_routing
           IMAGE_GENERATION_MODEL                   = var.image_generation_model
+          VECTOR_STORE_EMBEDDING_MODEL             = var.vector_store_embedding_model
+          EXTRA_MODEL_PARAMS_DENYLIST              = var.extra_model_params_denylist
           # Serve IPv6 as well as IPv4, from one dual-stack socket: with IPv6 on,
           # service discovery publishes an AAAA record per task, and a client that
           # resolves it first would otherwise get a connection refused. Left at the
@@ -116,6 +118,7 @@ module "server" {
         { for k, v in {
           ENABLE_MCP_STREAMABLE_HTTP                             = var.enable_mcp_streamable_http
           ENABLE_MCP_SSE                                         = var.enable_mcp_sse
+          MCP_STATELESS_HTTP                                     = var.mcp_stateless_http
           AWS_S3_ACCELERATE                                      = var.aws_s3_accelerate
           AWS_BEDROCK_CROSS_REGION_INFERENCE                     = var.aws_bedrock_cross_region_inference
           AWS_BEDROCK_CROSS_REGION_INFERENCE_GLOBAL              = var.aws_bedrock_cross_region_inference_global
@@ -124,6 +127,7 @@ module "server" {
           AWS_BEDROCK_ALLOW_CROSS_REGION_INFERENCE_PROFILE_ARN   = var.aws_bedrock_allow_cross_region_inference_profile_arn
           AWS_BEDROCK_ALLOW_APPLICATION_INFERENCE_PROFILE_ARN    = var.aws_bedrock_allow_application_inference_profile_arn
           AWS_BEDROCK_ALLOW_PROMPT_ROUTER_ARN                    = var.aws_bedrock_allow_prompt_router_arn
+          AWS_BEDROCK_ALLOW_PROMPT_ARN                           = var.aws_bedrock_allow_prompt_arn
           OTEL_ENABLED                                           = var.otel_enabled
           OTEL_SAMPLE_RATE                                       = var.otel_sample_rate
           LOG_REQUEST_PARAMS                                     = var.log_request_params
@@ -162,6 +166,10 @@ module "server" {
           AWS_BEDROCK_ALLOW_EXTERNAL_WEB_ACCESS_OVERRIDE         = var.aws_bedrock_allow_external_web_access_override
           MAX_INPUT_FILE_SIZE                                    = var.max_input_file_size
           MAX_CONCURRENT_INPUT_DOWNLOADS                         = var.max_concurrent_input_downloads
+          REALTIME_ALLOW_SESSION_OVERRIDE                        = var.realtime_allow_session_override
+          VECTOR_STORE_CHUNK_SIZE_TOKENS                         = var.vector_store_chunk_size_tokens
+          VECTOR_STORE_CHUNK_OVERLAP_TOKENS                      = var.vector_store_chunk_overlap_tokens
+          EXTRA_MODEL_PARAMS_DROP_ALL                            = var.extra_model_params_drop_all
         } : k => tostring(v) if v != null },
         { for k, v in {
           AWS_S3_REGIONAL_BUCKETS           = local.regional_buckets_combined
@@ -176,9 +184,16 @@ module "server" {
           PROXY_TRUSTED_HOSTS               = local.proxy_trusted_hosts
         } : k => jsonencode(v) if v != null }
       )
-      secrets = var.api_key != null || var.api_key_create ? {
-        API_KEY = var.api_key != null ? var.api_key : random_password.api_key[0].result
-      } : null
+      secrets = merge(
+        var.api_key != null || var.api_key_create ? {
+          API_KEY = var.api_key != null ? var.api_key : random_password.api_key[0].result
+        } : {},
+        # Tested on the inputs, not on the value: the generated key is unknown at
+        # plan time, and comparing it to null would make the secret names unknown.
+        var.realtime_client_secret_key != null || local.create_realtime_client_secret_key ? {
+          REALTIME_CLIENT_SECRET_KEY = local.realtime_client_secret_key
+        } : {},
+      )
       port_mappings = {
         http = {
           container_port    = local.port
@@ -264,6 +279,7 @@ data "aws_iam_policy_document" "server" {
       "bedrock:ListInvocationSteps",
       "bedrock:GetInvocationStep",
       "bedrock:GetSession",
+      "bedrock:UpdateSession",
       "bedrock:EndSession",
       "bedrock:DeleteSession",
       "bedrock:TagResource",
@@ -386,6 +402,21 @@ data "aws_iam_policy_document" "server" {
         "bedrock:GetPromptRouter",
       ]
       resources = ["*"]
+    }
+  }
+
+  # Bedrock - Prompt Management (Optional)
+  # GetPrompt resolves the model bound to the prompt variant, RenderPrompt fills
+  # its variables in.
+  dynamic "statement" {
+    for_each = var.aws_bedrock_allow_prompt_arn == true ? [1] : []
+    content {
+      sid = "BedrockPromptManagement"
+      actions = [
+        "bedrock:GetPrompt",
+        "bedrock:RenderPrompt",
+      ]
+      resources = ["arn:aws:bedrock:*:*:prompt/*"]
     }
   }
 
