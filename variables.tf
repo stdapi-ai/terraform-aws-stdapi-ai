@@ -375,6 +375,12 @@ variable "aws_transcribe_s3_bucket" {
   default     = null
 }
 
+variable "aws_transcribe_output_encryption_key_arn" {
+  description = "KMS key ARN encrypting the transcription job output written to aws_transcribe_s3_bucket. The key must be usable from every region a transcription job can be served from; this module grants the task role kms:GenerateDataKey and kms:Decrypt on it, and the key policy must allow the same actions. Default to the bucket's own default encryption."
+  type        = string
+  default     = null
+}
+
 variable "aws_s3_tmp_prefix" {
   description = "S3 prefix (folder path) for temporary files used during job processing. Default to 'tmp/'."
   type        = string

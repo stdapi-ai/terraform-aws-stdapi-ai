@@ -50,62 +50,63 @@ module "server" {
       image = local.container_image
       environment = merge(
         { for k, v in {
-          AWS_S3_BUCKET                          = local.s3_bucket_name
-          AWS_POLLY_REGION                       = var.aws_polly_region
-          AWS_COMPREHEND_REGION                  = var.aws_comprehend_region
-          AWS_BEDROCK_REGIONS                    = var.aws_bedrock_regions != null ? join(",", var.aws_bedrock_regions) : null
-          AWS_BEDROCK_MANTLE_REGIONS             = var.aws_bedrock_mantle_regions != null ? join(",", var.aws_bedrock_mantle_regions) : null
-          AWS_BEDROCK_MANTLE_PREFERRED_MODELS    = var.aws_bedrock_mantle_preferred_models != null ? join(",", var.aws_bedrock_mantle_preferred_models) : null
-          AWS_BEDROCK_MANTLE_PROJECT             = var.aws_bedrock_mantle_project
-          AWS_BEDROCK_GUARDRAIL_IDENTIFIER       = var.aws_bedrock_guardrail_identifier
-          AWS_BEDROCK_GUARDRAIL_VERSION          = var.aws_bedrock_guardrail_version
-          AWS_BEDROCK_GUARDRAIL_TRACE            = var.aws_bedrock_guardrail_trace
-          AWS_BEDROCK_SESSION_ENCRYPTION_KEY_ARN = var.aws_bedrock_session_encryption_key_arn
-          AWS_BEDROCK_USER_ROLE_ARN              = var.aws_bedrock_user_role_arn
-          AWS_BEDROCK_USER_ROLE_SESSION_DURATION = var.aws_bedrock_user_role_session_duration
-          AWS_BEDROCK_USER_ROLE_TAG_KEY          = var.aws_bedrock_user_role_tag_key
-          AWS_BEDROCK_USER_ROLE_REQUIRE_IDENTITY = var.aws_bedrock_user_role_require_identity
-          AWS_TRANSCRIBE_REGION                  = var.aws_transcribe_region
-          AWS_TRANSCRIBE_S3_BUCKET               = var.aws_transcribe_s3_bucket
-          AWS_S3_TMP_PREFIX                      = var.aws_s3_tmp_prefix
-          AWS_S3_FILES_PREFIX                    = var.aws_s3_files_prefix
-          AWS_S3_VIDEOS_PREFIX                   = var.aws_s3_videos_prefix
-          AWS_S3_BATCHES_PREFIX                  = var.aws_s3_batches_prefix
-          AWS_BEDROCK_BATCH_ROLE_ARN             = local.bedrock_batch_role_arn
-          AWS_S3_VECTOR_STORES_PREFIX            = var.aws_s3_vector_stores_prefix
-          AWS_S3_VECTORS_BUCKET                  = local.s3_vectors_bucket_name
-          AWS_S3_VECTORS_REGION                  = local.s3_vectors_bucket_name != null ? local.s3_vectors_region : null
-          AWS_TRANSLATE_REGION                   = var.aws_translate_region
-          TIMEZONE                               = var.timezone
-          OPENAI_ROUTES_PREFIX                   = var.openai_routes_prefix
-          ANTHROPIC_ROUTES_PREFIX                = var.anthropic_routes_prefix
-          COHERE_ROUTES_PREFIX                   = var.cohere_routes_prefix
-          API_KEY_SSM_PARAMETER                  = var.api_key_ssm_parameter
-          API_KEY_SECRETSMANAGER_SECRET          = var.api_key_secretsmanager_secret
-          API_KEY_SECRETSMANAGER_KEY             = var.api_key_secretsmanager_key
-          AUTHENTICATION_MODE                    = var.authentication_mode
-          AWS_COGNITO_USER_POOL_ID               = var.aws_cognito_user_pool_id
-          AWS_COGNITO_CLIENT_IDS                 = var.aws_cognito_client_ids
-          AWS_COGNITO_REQUIRED_SCOPES            = var.aws_cognito_required_scopes
-          AWS_COGNITO_ACCEPT_ID_TOKEN            = var.aws_cognito_accept_id_token
-          AWS_COGNITO_ISSUER_TYPE                = var.aws_cognito_issuer_type
-          OAUTH_RESOURCE_IDENTIFIER              = var.oauth_resource_identifier
-          OAUTH_AUTHORIZATION_SERVERS            = var.oauth_authorization_servers
-          OAUTH_SCOPES_SUPPORTED                 = var.oauth_scopes_supported
-          OTEL_SERVICE_NAME                      = var.otel_service_name
-          OTEL_EXPORTER_ENDPOINT                 = var.otel_exporter_endpoint
-          LOG_LEVEL                              = var.log_level
-          DEFAULT_MODEL_PARAMS                   = var.default_model_params
-          DEFAULT_MODEL_SERVICE_TIERS            = var.default_model_service_tiers
-          DEFAULT_TTS_MODEL                      = var.default_tts_model
-          DEFAULT_TTS_LANGUAGE                   = var.default_tts_language
-          TOKENS_ESTIMATION_DEFAULT_ENCODING     = var.tokens_estimation_default_encoding
-          CLOUDWATCH_METRICS_NAMESPACE           = var.cloudwatch_metrics_namespace
-          ANTHROPIC_BETA_ALLOWLIST               = var.anthropic_beta_allowlist
-          MCP_INCLUDE_TOOLS                      = var.mcp_include_tools
-          MCP_EXCLUDE_TOOLS                      = var.mcp_exclude_tools
-          AWS_BEDROCK_REGION_ROUTING             = var.aws_bedrock_region_routing
-          IMAGE_GENERATION_MODEL                 = var.image_generation_model
+          AWS_S3_BUCKET                            = local.s3_bucket_name
+          AWS_POLLY_REGION                         = var.aws_polly_region
+          AWS_COMPREHEND_REGION                    = var.aws_comprehend_region
+          AWS_BEDROCK_REGIONS                      = var.aws_bedrock_regions != null ? join(",", var.aws_bedrock_regions) : null
+          AWS_BEDROCK_MANTLE_REGIONS               = var.aws_bedrock_mantle_regions != null ? join(",", var.aws_bedrock_mantle_regions) : null
+          AWS_BEDROCK_MANTLE_PREFERRED_MODELS      = var.aws_bedrock_mantle_preferred_models != null ? join(",", var.aws_bedrock_mantle_preferred_models) : null
+          AWS_BEDROCK_MANTLE_PROJECT               = var.aws_bedrock_mantle_project
+          AWS_BEDROCK_GUARDRAIL_IDENTIFIER         = var.aws_bedrock_guardrail_identifier
+          AWS_BEDROCK_GUARDRAIL_VERSION            = var.aws_bedrock_guardrail_version
+          AWS_BEDROCK_GUARDRAIL_TRACE              = var.aws_bedrock_guardrail_trace
+          AWS_BEDROCK_SESSION_ENCRYPTION_KEY_ARN   = var.aws_bedrock_session_encryption_key_arn
+          AWS_BEDROCK_USER_ROLE_ARN                = var.aws_bedrock_user_role_arn
+          AWS_BEDROCK_USER_ROLE_SESSION_DURATION   = var.aws_bedrock_user_role_session_duration
+          AWS_BEDROCK_USER_ROLE_TAG_KEY            = var.aws_bedrock_user_role_tag_key
+          AWS_BEDROCK_USER_ROLE_REQUIRE_IDENTITY   = var.aws_bedrock_user_role_require_identity
+          AWS_TRANSCRIBE_REGION                    = var.aws_transcribe_region
+          AWS_TRANSCRIBE_S3_BUCKET                 = var.aws_transcribe_s3_bucket
+          AWS_TRANSCRIBE_OUTPUT_ENCRYPTION_KEY_ARN = var.aws_transcribe_output_encryption_key_arn
+          AWS_S3_TMP_PREFIX                        = var.aws_s3_tmp_prefix
+          AWS_S3_FILES_PREFIX                      = var.aws_s3_files_prefix
+          AWS_S3_VIDEOS_PREFIX                     = var.aws_s3_videos_prefix
+          AWS_S3_BATCHES_PREFIX                    = var.aws_s3_batches_prefix
+          AWS_BEDROCK_BATCH_ROLE_ARN               = local.bedrock_batch_role_arn
+          AWS_S3_VECTOR_STORES_PREFIX              = var.aws_s3_vector_stores_prefix
+          AWS_S3_VECTORS_BUCKET                    = local.s3_vectors_bucket_name
+          AWS_S3_VECTORS_REGION                    = local.s3_vectors_bucket_name != null ? local.s3_vectors_region : null
+          AWS_TRANSLATE_REGION                     = var.aws_translate_region
+          TIMEZONE                                 = var.timezone
+          OPENAI_ROUTES_PREFIX                     = var.openai_routes_prefix
+          ANTHROPIC_ROUTES_PREFIX                  = var.anthropic_routes_prefix
+          COHERE_ROUTES_PREFIX                     = var.cohere_routes_prefix
+          API_KEY_SSM_PARAMETER                    = var.api_key_ssm_parameter
+          API_KEY_SECRETSMANAGER_SECRET            = var.api_key_secretsmanager_secret
+          API_KEY_SECRETSMANAGER_KEY               = var.api_key_secretsmanager_key
+          AUTHENTICATION_MODE                      = var.authentication_mode
+          AWS_COGNITO_USER_POOL_ID                 = var.aws_cognito_user_pool_id
+          AWS_COGNITO_CLIENT_IDS                   = var.aws_cognito_client_ids
+          AWS_COGNITO_REQUIRED_SCOPES              = var.aws_cognito_required_scopes
+          AWS_COGNITO_ACCEPT_ID_TOKEN              = var.aws_cognito_accept_id_token
+          AWS_COGNITO_ISSUER_TYPE                  = var.aws_cognito_issuer_type
+          OAUTH_RESOURCE_IDENTIFIER                = var.oauth_resource_identifier
+          OAUTH_AUTHORIZATION_SERVERS              = var.oauth_authorization_servers
+          OAUTH_SCOPES_SUPPORTED                   = var.oauth_scopes_supported
+          OTEL_SERVICE_NAME                        = var.otel_service_name
+          OTEL_EXPORTER_ENDPOINT                   = var.otel_exporter_endpoint
+          LOG_LEVEL                                = var.log_level
+          DEFAULT_MODEL_PARAMS                     = var.default_model_params
+          DEFAULT_MODEL_SERVICE_TIERS              = var.default_model_service_tiers
+          DEFAULT_TTS_MODEL                        = var.default_tts_model
+          DEFAULT_TTS_LANGUAGE                     = var.default_tts_language
+          TOKENS_ESTIMATION_DEFAULT_ENCODING       = var.tokens_estimation_default_encoding
+          CLOUDWATCH_METRICS_NAMESPACE             = var.cloudwatch_metrics_namespace
+          ANTHROPIC_BETA_ALLOWLIST                 = var.anthropic_beta_allowlist
+          MCP_INCLUDE_TOOLS                        = var.mcp_include_tools
+          MCP_EXCLUDE_TOOLS                        = var.mcp_exclude_tools
+          AWS_BEDROCK_REGION_ROUTING               = var.aws_bedrock_region_routing
+          IMAGE_GENERATION_MODEL                   = var.image_generation_model
           # Serve IPv6 as well as IPv4, from one dual-stack socket: with IPv6 on,
           # service discovery publishes an AAAA record per task, and a client that
           # resolves it first would otherwise get a connection refused. Left at the
@@ -669,6 +670,19 @@ data "aws_iam_policy_document" "server" {
     }
   }
 
+  # Transcribe - Output Encryption KMS (Optional)
+  dynamic "statement" {
+    for_each = var.aws_transcribe_output_encryption_key_arn != null ? [1] : []
+    content {
+      sid = "TranscribeOutputEncryption"
+      actions = [
+        "kms:GenerateDataKey",
+        "kms:Decrypt",
+      ]
+      resources = [var.aws_transcribe_output_encryption_key_arn]
+    }
+  }
+
   # S3 - Transcribe Storage (Only if transcribe S3 bucket is different from main bucket)
   dynamic "statement" {
     for_each = var.aws_transcribe_s3_bucket != null && var.aws_transcribe_s3_bucket != local.s3_bucket_name ? [1] : []
@@ -697,9 +711,14 @@ data "aws_iam_policy_document" "server" {
   }
 
   # Translate - Text Translation (Always Enabled)
+  # ListLanguages has no resource-level ARN. It is read once at startup to refuse an
+  # unsupported language pair before the call; without it the check is simply skipped.
   statement {
-    sid       = "TranslateTextTranslation"
-    actions   = ["translate:TranslateText"]
+    sid = "TranslateTextTranslation"
+    actions = [
+      "translate:TranslateText",
+      "translate:ListLanguages",
+    ]
     resources = ["*"]
   }
 }
