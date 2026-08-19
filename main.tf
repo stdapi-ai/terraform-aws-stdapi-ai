@@ -6,6 +6,8 @@ data "aws_region" "current" {}
 
 data "aws_caller_identity" "current" {}
 
+data "aws_partition" "current" {}
+
 locals {
   name_prefix = "${var.name_prefix}-${random_id.main.hex}"
   name        = "${local.name_prefix}-${data.aws_region.current.region}"

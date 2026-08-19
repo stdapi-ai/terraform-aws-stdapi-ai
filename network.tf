@@ -29,6 +29,16 @@ locals {
   # Check if Secrets Manager is needed for API key authentication
   secretsmanager_needed = var.api_key_secretsmanager_secret != null
 
+  # The vector store indexing queue is reached in the single region its URL names, with no
+  # failover, and only when durable indexing is enabled.
+  sqs_regions           = local.sqs_vector_store_enabled ? [local.sqs_vector_store_queue_region] : []
+  sqs_in_current_region = contains(local.sqs_regions, local.current_region)
+
+  # The vector bucket is reached in the single region it lives in, with no failover, and only
+  # when the Vector Stores API is enabled.
+  s3vectors_regions           = local.vector_stores_enabled ? [local.s3_vectors_region] : []
+  s3vectors_in_current_region = contains(local.s3vectors_regions, local.current_region)
+
   # Check if any AWS service may be called outside the current region
   # VPC endpoints only work within the same region, so cross-region access requires internet
   cross_region_access_needed = length(setsubtract(distinct(concat(
@@ -37,6 +47,8 @@ locals {
     local.comprehend_regions,
     local.transcribe_regions,
     local.translate_regions,
+    local.sqs_regions,
+    local.s3vectors_regions,
   )), [local.current_region])) > 0
 
   # Build VPC endpoints list dynamically based on which services are in the current region
@@ -52,6 +64,8 @@ locals {
     local.transcribe_in_current_region ? ["transcribe"] : [],
     local.comprehend_in_current_region ? ["comprehend"] : [],
     local.translate_in_current_region ? ["translate"] : [],
+    local.sqs_in_current_region ? ["sqs"] : [],
+    local.s3vectors_in_current_region ? ["s3vectors"] : [],
   )
 
   # Internet access required

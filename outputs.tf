@@ -63,6 +63,16 @@ output "vectors_region" {
   value       = local.s3_vectors_bucket_name != null ? local.s3_vectors_region : null
 }
 
+output "vector_store_queue_url" {
+  description = "URL of the Amazon SQS queue carrying the vector store indexing jobs, or null when durable indexing is disabled."
+  value       = local.sqs_vector_store_queue_url
+}
+
+output "vector_store_queue_arn" {
+  description = "ARN of the Amazon SQS queue carrying the vector store indexing jobs, or null when durable indexing is disabled."
+  value       = local.sqs_vector_store_queue_arn
+}
+
 output "bedrock_batch_role_arn" {
   description = "ARN of the IAM service role Amazon Bedrock assumes to run batch inference jobs, or null when the Batch API is disabled."
   value       = local.bedrock_batch_role_arn

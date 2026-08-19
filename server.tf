@@ -80,6 +80,7 @@ module "server" {
           AWS_S3_VECTOR_STORES_PREFIX              = var.aws_s3_vector_stores_prefix
           AWS_S3_VECTORS_BUCKET                    = local.s3_vectors_bucket_name
           AWS_S3_VECTORS_REGION                    = local.s3_vectors_bucket_name != null ? local.s3_vectors_region : null
+          AWS_SQS_VECTOR_STORE_QUEUE_URL           = local.sqs_vector_store_queue_url
           AWS_BEDROCK_KNOWLEDGE_BASE_IDS           = length(var.aws_bedrock_knowledge_base_ids) > 0 ? join(",", var.aws_bedrock_knowledge_base_ids) : null
           AWS_TRANSLATE_REGION                     = var.aws_translate_region
           TIMEZONE                                 = var.timezone
@@ -648,6 +649,47 @@ data "aws_iam_policy_document" "server" {
         test     = "StringEquals"
         variable = "kms:ViaService"
         values   = ["s3vectors.${local.s3_vectors_region}.amazonaws.com"]
+      }
+    }
+  }
+
+  # SQS - Durable Vector Store Indexing (Optional)
+  # The server writes an indexing job to this one queue and reads it back, extending the delivery
+  # while it works. It never creates, deletes or reconfigures a queue, so no management action is
+  # granted; GetQueueAttributes is read-only and is what lets it honour the queue's own redrive
+  # policy. The dead-letter queue is written by Amazon SQS itself and never read by the server, so
+  # it is granted nothing.
+  dynamic "statement" {
+    for_each = local.sqs_vector_store_enabled ? [1] : []
+    content {
+      sid = "VectorStoreIndexingQueue"
+      actions = [
+        "sqs:SendMessage",
+        "sqs:ReceiveMessage",
+        "sqs:DeleteMessage",
+        "sqs:ChangeMessageVisibility",
+        "sqs:GetQueueAttributes",
+      ]
+      resources = [local.sqs_vector_store_queue_arn]
+    }
+  }
+
+  # KMS - Vector Store Indexing Queue Encryption (Optional)
+  # Amazon SQS calls AWS KMS under the task role's own identity, so the grant is conditioned on
+  # the call arriving through Amazon SQS in the region the queue lives in.
+  dynamic "statement" {
+    for_each = local.sqs_vector_store_enabled && local.sqs_vector_store_queue_kms_key_arn != null ? [1] : []
+    content {
+      sid = "KMSVectorStoreIndexingQueue"
+      actions = [
+        "kms:Decrypt",
+        "kms:GenerateDataKey"
+      ]
+      resources = [local.sqs_vector_store_queue_kms_key_arn]
+      condition {
+        test     = "StringEquals"
+        variable = "kms:ViaService"
+        values   = ["sqs.${local.sqs_vector_store_queue_region}.amazonaws.com"]
       }
     }
   }

@@ -486,6 +486,29 @@ variable "aws_s3_vectors_kms_key_arn" {
   default     = null
 }
 
+variable "aws_sqs_vector_store_queue_create" {
+  description = "If true, create the Amazon SQS queue, and its dead-letter queue, that make vector store indexing durable: a file attached to a store keeps being indexed by another task when the task that accepted it stops, instead of being reported as failed. Only used when the Vector Stores API is enabled and aws_sqs_vector_store_queue_url is not specified. When aws_sqs_vector_store_queue_url is specified, this value is ignored. Default to true."
+  type        = bool
+  default     = true
+}
+
+variable "aws_sqs_vector_store_queue_url" {
+  description = "URL of an existing Amazon SQS queue carrying the vector store indexing jobs. Must be a standard queue, never FIFO, and must have a dead-letter queue: a file the server cannot index is settled as failed once its deliveries run out, and its message is kept in the dead-letter queue. The queue is reached in the single region its URL names, and only ever carries identifiers, never file content. Requires the Vector Stores API to be enabled: the server refuses to start with a queue and nothing to index. When specified, takes precedence over aws_sqs_vector_store_queue_create. Default to none, meaning a queue is created when aws_sqs_vector_store_queue_create is true and the Vector Stores API is enabled, and indexing runs in the task that accepted the request otherwise."
+  type        = string
+  default     = null
+
+  validation {
+    condition     = var.aws_sqs_vector_store_queue_url == null || can(regex("^https://sqs\\.[a-z0-9-]{1,32}\\.[a-z0-9.-]{1,64}/[0-9]{12}/[A-Za-z0-9_-]{1,80}$", var.aws_sqs_vector_store_queue_url))
+    error_message = "Must be an Amazon SQS queue URL of the form 'https://sqs.<region>.<endpoint>/<account-id>/<queue-name>'. FIFO queues are not supported: content-based deduplication would silently drop a legitimate re-attach of the same files."
+  }
+}
+
+variable "aws_sqs_vector_store_queue_kms_key_arn" {
+  description = "KMS key ARN encrypting the queue specified in aws_sqs_vector_store_queue_url. Required to grant the server permission to use an SSE-KMS encrypted queue; leave unset for a queue encrypted with the Amazon SQS managed key. When using aws_sqs_vector_store_queue_create = true, the deployment key is used automatically and does not need to be specified here."
+  type        = string
+  default     = null
+}
+
 variable "vector_store_embedding_model" {
   description = "Model used to embed the files indexed into a vector store, and the queries searched against them. The model is frozen on each store when it is created, so changing it only affects stores created afterwards; existing stores keep answering with the model they were created with. Default to 'amazon.titan-embed-text-v2:0'."
   type        = string
