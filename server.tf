@@ -48,6 +48,10 @@ module "server" {
   container_definitions = {
     main = {
       image = local.container_image
+      # ECS sends SIGKILL 30s after SIGTERM by default, which would cut the
+      # server's own drain short. Give it the drain window plus 10s of headroom
+      # for the shutdown itself, within the 120s ECS accepts on Fargate.
+      stop_timeout = var.shutdown_drain_timeout == null ? null : min(ceil(var.shutdown_drain_timeout) + 10, 120)
       environment = merge(
         { for k, v in {
           AWS_S3_BUCKET                            = local.s3_bucket_name
@@ -156,6 +160,7 @@ module "server" {
           AWS_BEDROCK_MAX_RETRIES                                = var.aws_bedrock_max_retries
           AWS_FAILOVER_MAX_RETRIES                               = var.aws_failover_max_retries
           AI_RESPONSE_TIMEOUT                                    = var.ai_response_timeout
+          SHUTDOWN_DRAIN_TIMEOUT                                 = var.shutdown_drain_timeout
           AWS_BEDROCK_DEPRECATED_MODEL_FALLBACK                  = var.aws_bedrock_deprecated_model_fallback
           AWS_S3_VIDEOS_EXPIRES_AFTER                            = var.aws_s3_videos_expires_after
           CLOUDWATCH_METRICS                                     = var.cloudwatch_metrics

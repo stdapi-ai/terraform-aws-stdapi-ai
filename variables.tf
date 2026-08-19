@@ -934,6 +934,17 @@ variable "ai_response_timeout" {
   default     = null
 }
 
+variable "shutdown_drain_timeout" {
+  description = "Maximum time in seconds the server waits, once asked to stop, for background work that requests started and did not wait for: temporary file cleanups, vector store file indexing, and the release of live audio sessions. Work still running when the wait ends is cancelled and counted as a warning in the server's stop log event. This wait is best effort, not a delivery guarantee: a container runtime sends SIGKILL a fixed delay after the stop signal. This module raises the task's own stop timeout to match, so the wait is not cut short here; a deployment that does not use this module must raise it itself, because the default on Amazon ECS is 30 seconds. Values above 110 are capped, since Fargate accepts at most 120. Set to 0 to stop as fast as possible, cancelling background work immediately. Default to 10."
+  type        = number
+  default     = null
+
+  validation {
+    condition     = var.shutdown_drain_timeout == null || var.shutdown_drain_timeout >= 0
+    error_message = "Must be greater than or equal to 0."
+  }
+}
+
 variable "model_cache_seconds" {
   description = "Cache lifetime in seconds for the Bedrock models list."
   type        = number
