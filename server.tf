@@ -16,7 +16,7 @@ module "server" {
   container_insight                 = var.container_insight
   name_prefix                       = local.name_prefix
   security_group_ids                = compact([module.vpc.security_group_id])
-  task_role_policies                = concat([aws_iam_policy.server.arn], var.ecs_task_role_policy_arns)
+  task_role_policies                = concat([aws_iam_policy.server.arn, aws_iam_policy.server_services.arn], var.ecs_task_role_policy_arns)
   cpu_architecture                  = var.cpu_architecture
   cpu                               = var.cpu
   memory                            = var.memory
@@ -233,10 +233,39 @@ module "server" {
 }
 
 
+#: IAM's hard ceiling on the size of a managed policy document, in characters.
+#  Not adjustable through Service Quotas, and whitespace does not count toward it.
+locals {
+  iam_managed_policy_max_characters = 6144
+}
+
 resource "aws_iam_policy" "server" {
   name   = "${local.name}-policy"
   policy = data.aws_iam_policy_document.server.json
   tags   = local.apn_tags
+
+  # Caught at plan time, where the statement that overflowed is still in front of
+  # you. Without it, IAM answers CreatePolicy with a bare "LimitExceeded: Cannot
+  # exceed quota for PolicySize: 6144" halfway through an apply.
+  lifecycle {
+    precondition {
+      condition     = length(data.aws_iam_policy_document.server.json) <= local.iam_managed_policy_max_characters
+      error_message = "The Amazon Bedrock policy renders ${length(data.aws_iam_policy_document.server.json)} characters, over IAM's ${local.iam_managed_policy_max_characters}-character limit for a managed policy. Move one of its statements into a further policy rather than widening the actions of another."
+    }
+  }
+}
+
+resource "aws_iam_policy" "server_services" {
+  name   = "${local.name}-services-policy"
+  policy = data.aws_iam_policy_document.server_services.json
+  tags   = local.apn_tags
+
+  lifecycle {
+    precondition {
+      condition     = length(data.aws_iam_policy_document.server_services.json) <= local.iam_managed_policy_max_characters
+      error_message = "The supporting-services policy renders ${length(data.aws_iam_policy_document.server_services.json)} characters, over IAM's ${local.iam_managed_policy_max_characters}-character limit for a managed policy. Move one of its statements into a further policy rather than widening the actions of another."
+    }
+  }
 }
 
 data "aws_iam_policy_document" "server" {
@@ -340,21 +369,6 @@ data "aws_iam_policy_document" "server" {
     resources = ["arn:aws:bedrock-websearch:*:*:*"]
   }
 
-  # Bedrock - Session Storage KMS encryption (Optional)
-  dynamic "statement" {
-    for_each = var.aws_bedrock_session_encryption_key_arn != null ? [1] : []
-    content {
-      sid = "BedrockSessionStorageKms"
-      actions = [
-        "kms:CreateGrant",
-        "kms:Decrypt",
-        "kms:DescribeKey",
-        "kms:GenerateDataKey",
-      ]
-      resources = [var.aws_bedrock_session_encryption_key_arn]
-    }
-  }
-
   # Bedrock - Batch Inference (Optional)
   # The server submits, polls and cancels its own jobs; Amazon Bedrock runs them under the batch
   # service role, so the models are invoked by that role and not by this one. The submitted
@@ -369,34 +383,6 @@ data "aws_iam_policy_document" "server" {
         "bedrock:StopModelInvocationJob",
       ]
       resources = ["arn:aws:bedrock:*:${data.aws_caller_identity.current.account_id}:model-invocation-job/*"]
-    }
-  }
-
-  # IAM - Batch Service Role Hand-Off (Optional)
-  # Creating a job hands the service role to Amazon Bedrock, which requires iam:PassRole. Scoped to
-  # that one role and to that one service: a wider grant would let the task role hand any role it
-  # can name to Amazon Bedrock and inherit its permissions.
-  dynamic "statement" {
-    for_each = local.bedrock_batch_role_arn != null ? [1] : []
-    content {
-      sid       = "BedrockBatchPassRole"
-      actions   = ["iam:PassRole"]
-      resources = [local.bedrock_batch_role_arn]
-      condition {
-        test     = "StringEquals"
-        variable = "iam:PassedToService"
-        values   = ["bedrock.amazonaws.com"]
-      }
-    }
-  }
-
-  # Pricing - Cost Tracking (Optional)
-  dynamic "statement" {
-    for_each = var.cost_tracking == true ? [1] : []
-    content {
-      sid       = "PricingCostTracking"
-      actions   = ["pricing:GetProducts"]
-      resources = ["*"]
     }
   }
 
@@ -462,6 +448,95 @@ data "aws_iam_policy_document" "server" {
     resources = ["arn:aws:bedrock:*:*:guardrail/*"]
   }
 
+  # Bedrock - Guardrail checks (Always Required)
+  # Backs the default Moderations model. The operation runs standalone checks
+  # and takes no guardrail identifier, so it has no resource to scope to.
+  statement {
+    sid       = "BedrockGuardrailChecks"
+    actions   = ["bedrock:InvokeGuardrailChecks"]
+    resources = ["*"]
+  }
+
+  # Bedrock - Knowledge Base Vector Stores (Optional)
+  # The knowledge base is the customer's, so no create, update or delete action on it is granted,
+  # only the documents of its data source. bedrock:ListKnowledgeBases is deliberately absent: the
+  # server never discovers a knowledge base it was not given, so only the allowlisted ones are
+  # ever addressed.
+  dynamic "statement" {
+    for_each = length(var.aws_bedrock_knowledge_base_ids) > 0 ? [1] : []
+    content {
+      sid = "BedrockKnowledgeBaseVectorStores"
+      actions = [
+        "bedrock:GetKnowledgeBase",
+        "bedrock:Retrieve",
+        "bedrock:ListDataSources",
+        "bedrock:IngestKnowledgeBaseDocuments",
+        "bedrock:ListKnowledgeBaseDocuments",
+        "bedrock:GetKnowledgeBaseDocuments",
+        "bedrock:DeleteKnowledgeBaseDocuments",
+      ]
+      # The knowledge base is read in the first Bedrock region. An entry may name its data source
+      # as '<knowledgeBaseId>/<dataSourceId>', which is not part of the knowledge base ARN.
+      resources = [
+        for entry in var.aws_bedrock_knowledge_base_ids :
+        "arn:aws:bedrock:${local.candidate_regions[0]}:${data.aws_caller_identity.current.account_id}:knowledge-base/${split("/", entry)[0]}"
+      ]
+    }
+  }
+}
+
+# Everything the gateway calls that is not Amazon Bedrock itself. It is a
+# separate document, and a separate managed policy, only because IAM caps a
+# managed policy at 6,144 characters and the two together exceed that: with the
+# storage, vector, queue and speech features enabled the combined document
+# rendered 6,535 characters and CreatePolicy refused it. The split is by service
+# so that neither half can ever be empty -- the Polly, Comprehend and Translate
+# statements below are granted unconditionally.
+data "aws_iam_policy_document" "server_services" {
+
+  # Bedrock - Session Storage KMS encryption (Optional)
+  dynamic "statement" {
+    for_each = var.aws_bedrock_session_encryption_key_arn != null ? [1] : []
+    content {
+      sid = "BedrockSessionStorageKms"
+      actions = [
+        "kms:CreateGrant",
+        "kms:Decrypt",
+        "kms:DescribeKey",
+        "kms:GenerateDataKey",
+      ]
+      resources = [var.aws_bedrock_session_encryption_key_arn]
+    }
+  }
+
+  # IAM - Batch Service Role Hand-Off (Optional)
+  # Creating a job hands the service role to Amazon Bedrock, which requires iam:PassRole. Scoped to
+  # that one role and to that one service: a wider grant would let the task role hand any role it
+  # can name to Amazon Bedrock and inherit its permissions.
+  dynamic "statement" {
+    for_each = local.bedrock_batch_role_arn != null ? [1] : []
+    content {
+      sid       = "BedrockBatchPassRole"
+      actions   = ["iam:PassRole"]
+      resources = [local.bedrock_batch_role_arn]
+      condition {
+        test     = "StringEquals"
+        variable = "iam:PassedToService"
+        values   = ["bedrock.amazonaws.com"]
+      }
+    }
+  }
+
+  # Pricing - Cost Tracking (Optional)
+  dynamic "statement" {
+    for_each = var.cost_tracking == true ? [1] : []
+    content {
+      sid       = "PricingCostTracking"
+      actions   = ["pricing:GetProducts"]
+      resources = ["*"]
+    }
+  }
+
   # STS - Per-end-user cost attribution (Optional)
   # Scoped to the single configured role: the server opens one session of it per
   # end user. Tagging the session is a separate action from assuming the role,
@@ -476,15 +551,6 @@ data "aws_iam_policy_document" "server" {
       ]
       resources = [var.aws_bedrock_user_role_arn]
     }
-  }
-
-  # Bedrock - Guardrail checks (Always Required)
-  # Backs the default Moderations model. The operation runs standalone checks
-  # and takes no guardrail identifier, so it has no resource to scope to.
-  statement {
-    sid       = "BedrockGuardrailChecks"
-    actions   = ["bedrock:InvokeGuardrailChecks"]
-    resources = ["*"]
   }
 
   # S3 - File Storage (Optional)
@@ -691,33 +757,6 @@ data "aws_iam_policy_document" "server" {
         variable = "kms:ViaService"
         values   = ["sqs.${local.sqs_vector_store_queue_region}.amazonaws.com"]
       }
-    }
-  }
-
-  # Bedrock - Knowledge Base Vector Stores (Optional)
-  # The knowledge base is the customer's, so no create, update or delete action on it is granted,
-  # only the documents of its data source. bedrock:ListKnowledgeBases is deliberately absent: the
-  # server never discovers a knowledge base it was not given, so only the allowlisted ones are
-  # ever addressed.
-  dynamic "statement" {
-    for_each = length(var.aws_bedrock_knowledge_base_ids) > 0 ? [1] : []
-    content {
-      sid = "BedrockKnowledgeBaseVectorStores"
-      actions = [
-        "bedrock:GetKnowledgeBase",
-        "bedrock:Retrieve",
-        "bedrock:ListDataSources",
-        "bedrock:IngestKnowledgeBaseDocuments",
-        "bedrock:ListKnowledgeBaseDocuments",
-        "bedrock:GetKnowledgeBaseDocuments",
-        "bedrock:DeleteKnowledgeBaseDocuments",
-      ]
-      # The knowledge base is read in the first Bedrock region. An entry may name its data source
-      # as '<knowledgeBaseId>/<dataSourceId>', which is not part of the knowledge base ARN.
-      resources = [
-        for entry in var.aws_bedrock_knowledge_base_ids :
-        "arn:aws:bedrock:${local.candidate_regions[0]}:${data.aws_caller_identity.current.account_id}:knowledge-base/${split("/", entry)[0]}"
-      ]
     }
   }
 

@@ -206,7 +206,7 @@ Always created, regardless of `subnet_ids`, `alb_enabled`, or any other toggle. 
 | EC2.43 | 🔵 Low | ECS service security group should be tagged | ✅ Pass | Unconditional. |
 | CloudWatch.16 | 🟡 Medium | CloudWatch log groups should be retained for a specified time period | ✅ Pass | `cloudwatch_logs_retention_in_days` defaults `365`, applied to every ECS log group including Container Insights. |
 | CloudWatch.17 | 🟠 High | CloudWatch alarm actions should be activated | ✅ Pass | Unconditional whenever alarms exist (see **Other options** below). |
-| IAM.1 | 🟠 High | IAM policies should not allow full "*" administrative privileges | ✅ Pass | The ECS execution/task role policies and the aggregated `aws_iam_policy.server` use no wildcard actions. |
+| IAM.1 | 🟠 High | IAM policies should not allow full "*" administrative privileges | ✅ Pass | The ECS execution/task role policies and the two aggregated policies, `aws_iam_policy.server` and `aws_iam_policy.server_services`, use no wildcard actions. |
 | IAM.21 | 🔵 Low | IAM customer managed policies should not allow wildcard actions for services | ✅ Pass | Same statements as IAM.1 — no wildcard (`service:*`) actions. |
 | S3.2 / S3.3 | 🔴 Critical | S3 buckets should block public read/write access | ✅ Pass | `aws_s3_bucket_public_access_block` sets all four flags to `true` for every bucket (main and regional). |
 | S3.8 | 🟠 High | S3 buckets should block public access (account/bucket combined check) | ✅ Pass | Same configuration as S3.2/S3.3. |
@@ -363,6 +363,7 @@ All the options above are off by default and never required to pass a control in
 | [aws_cloudwatch_metric_alarm.error_critical_logs](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudwatch_metric_alarm) | resource |
 | [aws_cloudwatch_query_definition.main](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudwatch_query_definition) | resource |
 | [aws_iam_policy.server](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_policy) | resource |
+| [aws_iam_policy.server_services](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_policy) | resource |
 | [aws_iam_role.batch](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role) | resource |
 | [aws_iam_role_policy.batch](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role_policy) | resource |
 | [aws_lb.main](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/lb) | resource |
