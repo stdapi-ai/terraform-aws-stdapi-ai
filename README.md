@@ -166,7 +166,7 @@ For integration against existing infrastructure and non-Terraform deployments, s
 | **[Resilience & Failover](https://stdapi.ai/operations_resilience/)** | Multi-region routing, retry scope, and what does not fail over |
 | **[Licensing](https://stdapi.ai/operations_licensing/)** | AGPL-3.0 community edition vs the Marketplace commercial license |
 | **[Compliance](https://stdapi.ai/operations_compliance/)** | Data residency, region allow-lists, encryption, and outbound paths |
-| **[IAM Permissions](https://stdapi.ai/operations_iam_permissions/)** | Deployment and task-role permissions required by this module |
+| **[IAM Permissions](https://stdapi.ai/operations_iam_permissions/)** | Task-role permissions the running gateway needs, for custom deployments and policy auditing |
 
 ## AWS Qualified Software
 
