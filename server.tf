@@ -342,6 +342,10 @@ data "aws_iam_policy_document" "server" {
       "bedrock-mantle:ListModels",
       "bedrock-mantle:GetModel",
       "bedrock-mantle:CancelInference",
+      # Serves /anthropic/v1/messages/count_tokens for a Mantle-served model:
+      # Bedrock's own CountTokens is Anthropic-only, so the count is proxied to
+      # the Mantle endpoint instead. Without it that route answers 500.
+      "bedrock-mantle:CountTokens",
     ]
     resources = ["arn:aws:bedrock-mantle:*:${data.aws_caller_identity.current.account_id}:project/*"]
   }
