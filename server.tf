@@ -152,6 +152,8 @@ module "server" {
           ENABLE_GZIP                                            = var.enable_gzip
           SSRF_PROTECTION_BLOCK_PRIVATE_NETWORKS                 = var.ssrf_protection_block_private_networks
           MODEL_CACHE_SECONDS                                    = var.model_cache_seconds
+          MODEL_CACHE_MAX_STALE_SECONDS                          = var.model_cache_max_stale_seconds
+          MODEL_CACHE_SHARED                                     = var.model_cache_shared
           DROP_UNSUPPORTED_SYSTEM_PROMPT                         = var.drop_unsupported_system_prompt
           AWS_BEDROCK_ALLOW_GUARDRAIL_OVERRIDE                   = var.aws_bedrock_allow_guardrail_override
           AWS_BEDROCK_ALLOW_SERVICE_TIER_OVERRIDE                = var.aws_bedrock_allow_service_tier_override

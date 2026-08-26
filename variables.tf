@@ -1015,8 +1015,20 @@ variable "shutdown_drain_timeout" {
 }
 
 variable "model_cache_seconds" {
-  description = "Cache lifetime in seconds for the Bedrock models list."
+  description = "Age in seconds at which the cached Bedrock models list is refreshed. Once reached, the next request needing the list is answered from the cached one and the refresh runs in the background, so no request waits for it. Default to the application default (900, 15 minutes)."
   type        = number
+  default     = null
+}
+
+variable "model_cache_max_stale_seconds" {
+  description = "Maximum age in seconds the cached Bedrock models list may reach while its refresh keeps failing. Below it an expired list is served while the refresh runs; at or beyond it the next request waits for a successful refresh instead, so a deployment whose refreshes fail silently cannot serve an arbitrarily old list. Set to 0 to always wait for a refresh once the list has expired. Default to the application default (86400, 24 hours)."
+  type        = number
+  default     = null
+}
+
+variable "model_cache_shared" {
+  description = "If true, share one Bedrock models list between the deployment's servers through the DynamoDB table, which must be configured with aws_dynamodb_table or aws_dynamodb_table_create. One server refreshes the list and publishes it while the others read it, so a fleet performs one discovery pass per model_cache_seconds instead of one per server and a starting server is ready without a discovery pass of its own. Billed on the published list, roughly $0.60 to $2 per month at the default interval. Default to the application default (false)."
+  type        = bool
   default     = null
 }
 
