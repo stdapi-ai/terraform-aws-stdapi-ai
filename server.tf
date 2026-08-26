@@ -61,6 +61,7 @@ module "server" {
           AWS_BEDROCK_MANTLE_REGIONS               = var.aws_bedrock_mantle_regions != null ? join(",", var.aws_bedrock_mantle_regions) : null
           AWS_BEDROCK_MANTLE_PREFERRED_MODELS      = var.aws_bedrock_mantle_preferred_models != null ? join(",", var.aws_bedrock_mantle_preferred_models) : null
           AWS_BEDROCK_MANTLE_PROJECT               = var.aws_bedrock_mantle_project
+          AWS_BEDROCK_MARKETPLACE_ENDPOINT_REGIONS = var.aws_bedrock_marketplace_endpoint_regions != null ? join(",", var.aws_bedrock_marketplace_endpoint_regions) : null
           AWS_BEDROCK_GUARDRAIL_IDENTIFIER         = var.aws_bedrock_guardrail_identifier
           AWS_BEDROCK_GUARDRAIL_VERSION            = var.aws_bedrock_guardrail_version
           AWS_BEDROCK_GUARDRAIL_TRACE              = var.aws_bedrock_guardrail_trace
@@ -132,6 +133,8 @@ module "server" {
           AWS_BEDROCK_CROSS_REGION_INFERENCE_GLOBAL              = var.aws_bedrock_cross_region_inference_global
           AWS_BEDROCK_LEGACY                                     = var.aws_bedrock_legacy
           AWS_BEDROCK_MARKETPLACE_AUTO_SUBSCRIBE                 = var.aws_bedrock_marketplace_auto_subscribe
+          AWS_BEDROCK_MARKETPLACE_ENDPOINTS_ENABLED              = var.aws_bedrock_marketplace_endpoints_enabled
+          AWS_BEDROCK_ALLOW_MARKETPLACE_ENDPOINT_ARN             = var.aws_bedrock_allow_marketplace_endpoint_arn
           AWS_BEDROCK_ALLOW_CROSS_REGION_INFERENCE_PROFILE_ARN   = var.aws_bedrock_allow_cross_region_inference_profile_arn
           AWS_BEDROCK_ALLOW_APPLICATION_INFERENCE_PROFILE_ARN    = var.aws_bedrock_allow_application_inference_profile_arn
           AWS_BEDROCK_ALLOW_PROMPT_ROUTER_ARN                    = var.aws_bedrock_allow_prompt_router_arn
@@ -442,6 +445,41 @@ data "aws_iam_policy_document" "server" {
         "aws-marketplace:ViewSubscriptions"
       ]
       resources = ["*"]
+    }
+  }
+
+  # Bedrock - Marketplace Model Endpoints (Optional)
+  # Discovery and invocation only: the server never creates, updates or deletes
+  # an endpoint, so none of the sagemaker:Create*/Delete*/Update* actions AWS's
+  # own example policy carries is granted. sagemaker:InvokeEndpoint is what
+  # Amazon Bedrock calls on the server's behalf when it forwards the request,
+  # which is why it is conditioned on aws:CalledViaLast.
+  dynamic "statement" {
+    for_each = var.aws_bedrock_marketplace_endpoints_enabled == true ? [1] : []
+    content {
+      sid = "BedrockMarketplaceEndpointDiscovery"
+      actions = [
+        "bedrock:ListMarketplaceModelEndpoints",
+        "bedrock:GetMarketplaceModelEndpoint"
+      ]
+      resources = ["*"]
+    }
+  }
+
+  dynamic "statement" {
+    for_each = var.aws_bedrock_marketplace_endpoints_enabled == true ? [1] : []
+    content {
+      sid = "BedrockMarketplaceEndpointInvoke"
+      actions = [
+        "sagemaker:InvokeEndpoint",
+        "sagemaker:InvokeEndpointWithResponseStream"
+      ]
+      resources = ["arn:aws:sagemaker:*:${data.aws_caller_identity.current.account_id}:endpoint/*"]
+      condition {
+        test     = "StringEquals"
+        variable = "aws:CalledViaLast"
+        values   = ["bedrock.amazonaws.com"]
+      }
     }
   }
 

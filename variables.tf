@@ -347,6 +347,28 @@ variable "aws_bedrock_marketplace_auto_subscribe" {
   default     = null
 }
 
+variable "aws_bedrock_marketplace_endpoints_enabled" {
+  description = <<-EOT
+    If true, publish the Amazon Bedrock Marketplace model endpoints deployed in this account and serve them like any other chat model. The module never creates an endpoint: it only grants the server the permissions to discover and invoke the ones you deployed.
+
+    Disabled by default. A Marketplace model endpoint runs on dedicated instances and is billed by the instance-hour for as long as it exists, whether or not it is called.
+  EOT
+  type        = bool
+  default     = null
+}
+
+variable "aws_bedrock_marketplace_endpoint_regions" {
+  description = "Regions searched for Amazon Bedrock Marketplace model endpoints. Every region listed must also appear in var.aws_bedrock_regions. Default to every var.aws_bedrock_regions region."
+  type        = list(string)
+  default     = null
+}
+
+variable "aws_bedrock_allow_marketplace_endpoint_arn" {
+  description = "If true, allow users to pass the ARN of an Amazon Bedrock Marketplace model endpoint directly as a model ID. Cost-bearing: a caller who can name any endpoint ARN can direct traffic at instances you are already paying for. Default to false."
+  type        = bool
+  default     = null
+}
+
 variable "aws_bedrock_guardrail_identifier" {
   description = "Amazon Bedrock Guardrails ID."
   type        = string
