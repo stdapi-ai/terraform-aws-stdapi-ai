@@ -604,19 +604,28 @@ variable "aws_dynamodb_region" {
 }
 
 variable "tenants" {
-  description = "Per-tenant API keys, one entry per tenant keyed by the tenant's name. Terraform owns each tenant's record in the shared DynamoDB table — identity, model allow/deny lists, endpoint restrictions (glob patterns against route path templates such as '/v1/chat/completions'), and the disabled flag — and requires aws_dynamodb_table or aws_dynamodb_table_create. The key secret never enters Terraform state: the server mints it and delivers it once through the SSM parameter named in the tenant_keys output. That parameter is a SecureString encrypted with this deployment's own KMS key, so reading the key also takes kms:Decrypt on that key and not merely ssm:GetParameter on the path: retrieve it and delete it as soon as it appears. An absent list restricts nothing; an empty list allows nothing; deny wins over allow. Default to no tenants, which leaves tenant API keys disabled."
+  description = "Per-tenant API keys, one entry per tenant keyed by the tenant's name. Terraform owns each tenant's record in the shared DynamoDB table — identity, model allow/deny lists, endpoint restrictions (glob patterns against route path templates such as '/v1/chat/completions'), the disabled flag, and optionally 'aws_role_arn', an IAM role of the tenant's own AWS account its model invocations then run under (its own Amazon Bedrock quota and bill) — and requires aws_dynamodb_table or aws_dynamodb_table_create. Declaring a role enables tenant AWS credentials on the server, grants the task role 'sts:AssumeRole' on exactly the declared roles, and cannot be combined with Amazon Bedrock Guardrails; the tenant must condition its role's trust policy on the ExternalId the server mints (read it from the tenant's 'secret#<key id>' record). The key secret never enters Terraform state: the server mints it and delivers it once through the SSM parameter named in the tenant_keys output. That parameter is a SecureString encrypted with this deployment's own KMS key, so reading the key also takes kms:Decrypt on that key and not merely ssm:GetParameter on the path: retrieve it and delete it as soon as it appears. An absent list restricts nothing; an empty list allows nothing; deny wins over allow. Default to no tenants, which leaves tenant API keys disabled."
   type = map(object({
     models_allow    = optional(list(string))
     models_deny     = optional(list(string))
     endpoints_allow = optional(list(string))
     endpoints_deny  = optional(list(string))
     disabled        = optional(bool, false)
+    aws_role_arn    = optional(string)
   }))
   default = {}
 
   validation {
     condition     = alltrue([for name, _ in var.tenants : can(regex("^[A-Za-z0-9_.-]{1,64}$", name))])
     error_message = "Each tenants key names the tenant: 1 to 64 characters, letters, digits, '_', '.' and '-' only."
+  }
+
+  validation {
+    condition = alltrue([
+      for _, tenant in var.tenants :
+      tenant.aws_role_arn == null || can(regex("^arn:aws(-[a-z]+)*:iam::[0-9]{12}:role/", tenant.aws_role_arn))
+    ])
+    error_message = "Each tenants aws_role_arn must be an IAM role ARN of the tenant's own AWS account, 'arn:aws:iam::<account>:role/<name>'."
   }
 }
 

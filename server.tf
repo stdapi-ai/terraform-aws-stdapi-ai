@@ -88,6 +88,7 @@ module "server" {
           AWS_DYNAMODB_REGION                      = local.dynamodb_table_name != null ? local.dynamodb_region : null
           TENANT_API_KEYS                          = local.tenant_keys_enabled ? true : null
           TENANT_KEY_SSM_PARAMETER_PREFIX          = local.tenant_key_ssm_parameter_prefix
+          TENANT_AWS_CREDENTIALS                   = length(local.tenant_role_arns) > 0 ? true : null
           TENANT_KEY_SSM_KMS_KEY_ID                = local.tenant_keys_enabled ? module.kms_key.arn : null
           TIMEZONE                                 = var.timezone
           OPENAI_ROUTES_PREFIX                     = var.openai_routes_prefix
@@ -599,6 +600,24 @@ data "aws_iam_policy_document" "server_services" {
         "sts:TagSession",
       ]
       resources = [var.aws_bedrock_user_role_arn]
+    }
+  }
+
+  # STS - Tenant AWS credentials (Optional)
+  # Scoped to exactly the cross-account roles the tenants declared, and
+  # conditioned on an ExternalId always being presented, so no path can assume
+  # a tenant role without the confused-deputy check the server performs.
+  dynamic "statement" {
+    for_each = length(local.tenant_role_arns) > 0 ? [1] : []
+    content {
+      sid       = "TenantRoleSessions"
+      actions   = ["sts:AssumeRole"]
+      resources = local.tenant_role_arns
+      condition {
+        test     = "StringLike"
+        variable = "sts:ExternalId"
+        values   = ["?*"]
+      }
     }
   }
 
