@@ -83,6 +83,8 @@ module "server" {
           AWS_SQS_VECTOR_STORE_QUEUE_URL           = local.sqs_vector_store_queue_url
           AWS_BEDROCK_KNOWLEDGE_BASE_IDS           = length(var.aws_bedrock_knowledge_base_ids) > 0 ? join(",", var.aws_bedrock_knowledge_base_ids) : null
           AWS_TRANSLATE_REGION                     = var.aws_translate_region
+          AWS_DYNAMODB_TABLE                       = local.dynamodb_table_name
+          AWS_DYNAMODB_REGION                      = local.dynamodb_table_name != null ? local.dynamodb_region : null
           TIMEZONE                                 = var.timezone
           OPENAI_ROUTES_PREFIX                     = var.openai_routes_prefix
           ANTHROPIC_ROUTES_PREFIX                  = var.anthropic_routes_prefix
@@ -871,5 +873,26 @@ data "aws_iam_policy_document" "server_services" {
       "translate:ListLanguages",
     ]
     resources = ["*"]
+  }
+
+  # DynamoDB - Shared Table (Optional)
+  # Scoped to the table itself, no index ARNs: the table has no GSI. UpdateItem, Scan and
+  # BatchGetItem are deliberately not granted — no code path calls them. When a customer
+  # managed key encrypts the table, DynamoDB uses grants it creates at table creation time to
+  # read and write, so no KMS permission is needed here.
+  dynamic "statement" {
+    for_each = local.dynamodb_table_name != null ? [1] : []
+    content {
+      sid = "DynamoDBSharedTable"
+      actions = [
+        "dynamodb:GetItem",
+        "dynamodb:PutItem",
+        "dynamodb:DeleteItem",
+        "dynamodb:Query",
+        "dynamodb:DescribeTable",
+        "dynamodb:DescribeTimeToLive",
+      ]
+      resources = [local.dynamodb_table_arn]
+    }
   }
 }

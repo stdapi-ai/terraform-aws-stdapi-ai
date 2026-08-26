@@ -557,6 +557,30 @@ variable "aws_translate_region" {
   default     = null
 }
 
+variable "aws_dynamodb_table_create" {
+  description = "If true, create a shared DynamoDB table for the server's internal state. Only used when aws_dynamodb_table is not specified. When aws_dynamodb_table is specified, this value is ignored. Default to false (table not created)."
+  type        = bool
+  default     = false
+}
+
+variable "aws_dynamodb_table" {
+  description = "Existing DynamoDB table name backing the server's internal state. When specified, takes precedence over aws_dynamodb_table_create. If not specified and aws_dynamodb_table_create is true, a table will be created automatically."
+  type        = string
+  default     = null
+}
+
+variable "aws_dynamodb_table_kms_key_arn" {
+  description = "KMS key ARN encrypting the DynamoDB table specified in aws_dynamodb_table, or created by aws_dynamodb_table_create. The key's own policy, not this module, must grant DynamoDB permission to use it (see AWS's 'Key policy for a customer managed key' guidance); DynamoDB uses grants for ongoing access, so the ECS task role itself needs no KMS permission for table reads and writes. Default to none, which keeps the table on the AWS owned key: always-on encryption that needs no key policy of its own."
+  type        = string
+  default     = null
+}
+
+variable "aws_dynamodb_region" {
+  description = "AWS region holding the DynamoDB table specified in aws_dynamodb_table, or created by aws_dynamodb_table_create. A DynamoDB table is a regional resource, so this setting has no failover, unlike aws_polly_region and similar settings. Default to the region this module is deployed in."
+  type        = string
+  default     = null
+}
+
 variable "timezone" {
   description = "Timezone for request date & time (IANA timezone identifier). Default to UTC."
   type        = string
