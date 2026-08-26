@@ -915,6 +915,48 @@ variable "cloudwatch_metrics_namespace" {
   default     = null
 }
 
+variable "cloudwatch_metrics_user_dimension" {
+  description = "If True, also publish the authenticated caller as a 'User' dimension on the usage metrics, which is what lets the usage API group by user_id. Stores one CloudWatch metric series per user, model and metric name, each billed as a custom metric, so its cost follows the size of your user population. Requires cloudwatch_metrics and usage_api. Default to false."
+  type        = bool
+  default     = null
+}
+
+variable "cloudwatch_metrics_region" {
+  description = "AWS region the usage API reads the published metrics from. Defaults to the region the server runs in, which is where its logs are ingested and therefore where the metrics exist. Only needs setting when the logs are shipped to another region."
+  type        = string
+  default     = null
+}
+
+variable "usage_api" {
+  description = "Serve the organization usage and costs endpoints (/v1/organization/usage/*, /v1/organization/costs) from the metrics cloudwatch_metrics publishes (adds the cloudwatch:GetMetricData and cloudwatch:ListMetrics permissions). Every query is billed by CloudWatch per metric read and is excluded from its free tier, and enabling this also stores the usage metrics under additional dimensions. Requires cloudwatch_metrics; the costs endpoint also requires cost_tracking. Default to false."
+  type        = bool
+  default     = null
+}
+
+variable "usage_api_admin_scopes" {
+  description = "OAuth 2.0 scopes an Amazon Cognito token must all carry to read the organization usage and costs endpoints, as a comma-separated list. With no scope named, no token is accepted and only the deployment's own API key may read them; a tenant API key is never accepted. Default to none."
+  type        = string
+  default     = null
+}
+
+variable "usage_api_max_metrics" {
+  description = "Maximum number of metric series one usage API query may read; a query matching more is refused rather than billed. Default to 500, which is also the CloudWatch per-request maximum."
+  type        = number
+  default     = null
+}
+
+variable "usage_api_max_range_days" {
+  description = "Maximum span, in days, between start_time and end_time on a usage API query. Default to 92."
+  type        = number
+  default     = null
+}
+
+variable "usage_api_cache_ttl" {
+  description = "Seconds an answered usage API query is reused for, so a client polling faster than the bucket width is not billed for a query that cannot have changed. Set to 0 to disable. Default to 60."
+  type        = number
+  default     = null
+}
+
 variable "cost_tracking" {
   description = "Enable per-request cost estimation from AWS Price List values (adds the pricing:GetProducts permission). Reported costs are an estimate from published prices, not your actual AWS bill; use cost_price_overrides for models the Price List API does not cover. Default to false."
   type        = bool

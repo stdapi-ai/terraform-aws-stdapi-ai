@@ -176,6 +176,13 @@ module "server" {
           AWS_BEDROCK_DEPRECATED_MODEL_FALLBACK                  = var.aws_bedrock_deprecated_model_fallback
           AWS_S3_VIDEOS_EXPIRES_AFTER                            = var.aws_s3_videos_expires_after
           CLOUDWATCH_METRICS                                     = var.cloudwatch_metrics
+          CLOUDWATCH_METRICS_USER_DIMENSION                      = var.cloudwatch_metrics_user_dimension
+          CLOUDWATCH_METRICS_REGION                              = var.cloudwatch_metrics_region
+          USAGE_API                                              = var.usage_api
+          USAGE_API_ADMIN_SCOPES                                 = var.usage_api_admin_scopes
+          USAGE_API_MAX_METRICS                                  = var.usage_api_max_metrics
+          USAGE_API_MAX_RANGE_DAYS                               = var.usage_api_max_range_days
+          USAGE_API_CACHE_TTL                                    = var.usage_api_cache_ttl
           COST_TRACKING                                          = var.cost_tracking
           AWS_BEDROCK_MANTLE_ENABLED                             = var.aws_bedrock_mantle_enabled
           AWS_BEDROCK_MANTLE_SERVICE_HEADER                      = var.aws_bedrock_mantle_service_header
@@ -583,6 +590,19 @@ data "aws_iam_policy_document" "server_services" {
     content {
       sid       = "PricingCostTracking"
       actions   = ["pricing:GetProducts"]
+      resources = ["*"]
+    }
+  }
+
+  # CloudWatch - Usage API (Optional)
+  # Wildcard resource because CloudWatch metric actions have no resource-level
+  # permissions: the cloudwatch:namespace condition key is documented for metric
+  # ingestion, not for reads.
+  dynamic "statement" {
+    for_each = var.usage_api == true ? [1] : []
+    content {
+      sid       = "CloudWatchUsageApi"
+      actions   = ["cloudwatch:GetMetricData", "cloudwatch:ListMetrics"]
       resources = ["*"]
     }
   }
