@@ -159,3 +159,12 @@ output "subnet_ids" {
   description = "Subnets IDs where the ECS service is deployed."
   value       = length(var.subnet_ids) > 1 ? var.subnet_ids : module.vpc.subnets_ids
 }
+output "tenant_keys" {
+  description = "Per tenant of var.tenants: the public key ID and the SSM SecureString parameter the server delivers the minted API key through, within a minute of starting or reconciling. Retrieve it once with 'aws ssm get-parameter --name <ssm_parameter> --with-decryption --query Parameter.Value --output text', hand it to the tenant, then delete the parameter -- the copy it holds is the only one, and it is the only thing between a reader of this deployment's KMS key and a working tenant credential. The SecureString is encrypted with that key, so retrieving it takes kms:Decrypt on it as well as ssm:GetParameter on the path. The key itself never enters Terraform state."
+  value = {
+    for name in keys(var.tenants) : name => {
+      key_id        = random_string.tenant_key_id[name].result
+      ssm_parameter = "${local.tenant_key_ssm_parameter_prefix}/${random_string.tenant_key_id[name].result}"
+    }
+  }
+}

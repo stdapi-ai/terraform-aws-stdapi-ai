@@ -603,6 +603,23 @@ variable "aws_dynamodb_region" {
   default     = null
 }
 
+variable "tenants" {
+  description = "Per-tenant API keys, one entry per tenant keyed by the tenant's name. Terraform owns each tenant's record in the shared DynamoDB table — identity, model allow/deny lists, endpoint restrictions (glob patterns against route path templates such as '/v1/chat/completions'), and the disabled flag — and requires aws_dynamodb_table or aws_dynamodb_table_create. The key secret never enters Terraform state: the server mints it and delivers it once through the SSM parameter named in the tenant_keys output. That parameter is a SecureString encrypted with this deployment's own KMS key, so reading the key also takes kms:Decrypt on that key and not merely ssm:GetParameter on the path: retrieve it and delete it as soon as it appears. An absent list restricts nothing; an empty list allows nothing; deny wins over allow. Default to no tenants, which leaves tenant API keys disabled."
+  type = map(object({
+    models_allow    = optional(list(string))
+    models_deny     = optional(list(string))
+    endpoints_allow = optional(list(string))
+    endpoints_deny  = optional(list(string))
+    disabled        = optional(bool, false)
+  }))
+  default = {}
+
+  validation {
+    condition     = alltrue([for name, _ in var.tenants : can(regex("^[A-Za-z0-9_.-]{1,64}$", name))])
+    error_message = "Each tenants key names the tenant: 1 to 64 characters, letters, digits, '_', '.' and '-' only."
+  }
+}
+
 variable "timezone" {
   description = "Timezone for request date & time (IANA timezone identifier). Default to UTC."
   type        = string

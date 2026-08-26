@@ -86,6 +86,9 @@ module "server" {
           AWS_TRANSLATE_REGION                     = var.aws_translate_region
           AWS_DYNAMODB_TABLE                       = local.dynamodb_table_name
           AWS_DYNAMODB_REGION                      = local.dynamodb_table_name != null ? local.dynamodb_region : null
+          TENANT_API_KEYS                          = local.tenant_keys_enabled ? true : null
+          TENANT_KEY_SSM_PARAMETER_PREFIX          = local.tenant_key_ssm_parameter_prefix
+          TENANT_KEY_SSM_KMS_KEY_ID                = local.tenant_keys_enabled ? module.kms_key.arn : null
           TIMEZONE                                 = var.timezone
           OPENAI_ROUTES_PREFIX                     = var.openai_routes_prefix
           ANTHROPIC_ROUTES_PREFIX                  = var.anthropic_routes_prefix
@@ -933,6 +936,55 @@ data "aws_iam_policy_document" "server_services" {
         "dynamodb:DescribeTimeToLive",
       ]
       resources = [local.dynamodb_table_arn]
+    }
+  }
+
+  # SSM Parameter Store - Tenant API key delivery (Optional)
+  # PutParameter writes each minted key exactly once (Overwrite=False); GetParameter is the
+  # crash recovery that re-reads a delivered key whose hash was never recorded. Scoped to this
+  # deployment's own prefix, so the role can never read another deployment's tenant keys.
+  dynamic "statement" {
+    for_each = local.tenant_keys_enabled ? [1] : []
+    content {
+      sid = "SsmTenantKeyDelivery"
+      actions = [
+        "ssm:PutParameter",
+        "ssm:GetParameter",
+      ]
+      resources = ["arn:${data.aws_partition.current.partition}:ssm:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:parameter${local.tenant_key_ssm_parameter_prefix}/*"]
+    }
+  }
+
+  # KMS - Tenant API key delivery (Optional)
+  # The delivery parameters are SecureStrings under this deployment's own key, so reading a
+  # delivered key needs kms:Decrypt on it and not merely ssm:GetParameter on the path, which
+  # is all the AWS managed alias/aws/ssm key would ask of any principal of the account.
+  # Parameter Store encrypts a standard SecureString with kms:Encrypt and an advanced one
+  # with kms:GenerateDataKey (the account's default parameter tier decides which), and reads
+  # either back with kms:Decrypt. ViaService keeps the grant unusable outside Parameter Store.
+  dynamic "statement" {
+    for_each = local.tenant_keys_enabled ? [1] : []
+    content {
+      sid = "KMSTenantKeyDelivery"
+      actions = [
+        "kms:Encrypt",
+        "kms:GenerateDataKey",
+        "kms:Decrypt",
+      ]
+      resources = [module.kms_key.arn]
+      condition {
+        test     = "StringEquals"
+        variable = "kms:ViaService"
+        values   = ["ssm.${data.aws_region.current.region}.amazonaws.com"]
+      }
+      # Parameter Store binds the parameter's ARN as the encryption context, so this
+      # narrows the grant to the delivery path rather than every SecureString the
+      # account encrypts under this key.
+      condition {
+        test     = "StringLike"
+        variable = "kms:EncryptionContext:PARAMETER_ARN"
+        values   = ["arn:${data.aws_partition.current.partition}:ssm:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:parameter${local.tenant_key_ssm_parameter_prefix}/*"]
+      }
     }
   }
 }
