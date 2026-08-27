@@ -89,6 +89,11 @@ module "server" {
           TENANT_API_KEYS                          = local.tenant_keys_enabled ? true : null
           TENANT_KEY_SSM_PARAMETER_PREFIX          = local.tenant_key_ssm_parameter_prefix
           TENANT_AWS_CREDENTIALS                   = length(local.tenant_role_arns) > 0 ? true : null
+          REALTIME_WEBRTC_ENABLED                  = var.realtime_webrtc_media_enabled ? true : null
+          REALTIME_WEBRTC_STUN_SERVER              = var.realtime_webrtc_media_enabled ? var.realtime_webrtc_stun_server : null
+          REALTIME_WEBRTC_TURN_SERVER              = var.realtime_webrtc_media_enabled ? var.realtime_webrtc_turn_server : null
+          REALTIME_WEBRTC_TURN_USERNAME            = var.realtime_webrtc_media_enabled ? var.realtime_webrtc_turn_username : null
+          REALTIME_WEBRTC_ALLOW_PRIVATE_CANDIDATES = var.realtime_webrtc_media_enabled ? var.realtime_webrtc_allow_private_candidates : null
           TENANT_KEY_SSM_KMS_KEY_ID                = local.tenant_keys_enabled ? module.kms_key.arn : null
           TIMEZONE                                 = var.timezone
           OPENAI_ROUTES_PREFIX                     = var.openai_routes_prefix
@@ -219,6 +224,9 @@ module "server" {
         # plan time, and comparing it to null would make the secret names unknown.
         var.realtime_client_secret_key != null || local.create_realtime_client_secret_key ? {
           REALTIME_CLIENT_SECRET_KEY = local.realtime_client_secret_key
+        } : {},
+        var.realtime_webrtc_media_enabled && var.realtime_webrtc_turn_password != null ? {
+          REALTIME_WEBRTC_TURN_PASSWORD = var.realtime_webrtc_turn_password
         } : {},
       )
       port_mappings = {

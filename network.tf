@@ -68,15 +68,22 @@ locals {
     local.s3vectors_in_current_region ? ["s3vectors"] : [],
   )
 
-  # Internet access required
-  internet_access_required = local.cross_region_access_needed || var.aws_bedrock_marketplace_auto_subscribe != false
+  # Internet access required. WebRTC media mode counts too: callers and the
+  # STUN server are on the internet, and with nat_gateways_allowed = false
+  # (which the mode requires) this is also what gives the task its public IP.
+  internet_access_required = local.cross_region_access_needed || var.aws_bedrock_marketplace_auto_subscribe != false || var.realtime_webrtc_media_enabled
+
+  # The VPC module only owns a network of its own when no subnets were supplied.
+  vpc_created = length(var.subnet_ids) == 0
 }
 
 module "vpc" {
   source = "JGoutin/vpc/aws"
-  # 1.4 is the first release whose ipv6_enabled reports the subnets rather than
-  # whether the module created them, which the dual-stack decisions below rely on.
-  version = "~> 1.4"
+  # 1.6 is the first release whose ipv6_enabled answers for provided subnets that
+  # carry no IPv6 block, which every dual-stack decision below relies on, and the
+  # first that opens application-subnet network ACL flows other than TCP, which
+  # the WebRTC media mode relies on.
+  version = "~> 1.6"
 
   name_prefix                                = local.name
   tags                                       = local.apn_tags
@@ -111,6 +118,11 @@ module "vpc" {
       protocol  = "tcp"
     }
   }
+  # The WebRTC media path, which is UDP and reaches the task directly. Both are empty when the
+  # mode is off, leaving the application subnets' network ACL as it was, and on operator-supplied
+  # subnets, where the ACL belongs to the operator and the module writes no rule in it.
+  internet_to_app_ports = local.vpc_created ? local.realtime_webrtc_nacl_ingress : {}
+  app_to_internet_ports = local.vpc_created ? local.realtime_webrtc_nacl_egress : {}
   public_ingress_ports = merge(
     {
       "http" = {

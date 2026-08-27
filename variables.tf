@@ -1534,3 +1534,64 @@ variable "deletion_protection" {
   type        = bool
   default     = false
 }
+variable "realtime_webrtc_media_enabled" {
+  description = "If true, enables the Realtime API's WebRTC transport (POST /v1/realtime/calls) with the media path terminated by the server task: the task gets a public IP, its security group opens the WebRTC UDP media port range to realtime_webrtc_ingress_ipv4_cidrs/ipv6_cidrs inbound and the callers' own ephemeral range outbound, plus the ports of the STUN and TURN servers the task reaches out to, the application subnets' network ACL carries those same flows, and the server is configured with the STUN/TURN settings below. Requires nat_gateways_allowed = false (the task must be publicly addressed for inbound media) and a single task (autoscaling_min_capacity = autoscaling_max_capacity = 1), because calls live in the answering task's memory and the media path cannot drain. On operator-supplied subnet_ids the network ACLs are yours: allow the media UDP port range inbound and the ephemeral range (1024-65535) in both directions there, since the module cannot write rules in a VPC it did not create. Off by default: this opens inbound UDP from the internet and pins the service to one task."
+  type        = bool
+  default     = false
+}
+variable "realtime_webrtc_stun_server" {
+  description = "STUN server the server queries to discover the public address it advertises to WebRTC callers, as a STUN URI. Required behind the 1:1 NAT of a public ECS task; any public STUN server works and learns nothing but the deployment's public address."
+  type        = string
+  default     = "stun:stun.l.google.com:19302"
+}
+variable "realtime_webrtc_turn_server" {
+  description = "Operator-run TURN relay advertised to WebRTC callers whose networks block UDP, as a TURN URI (e.g. 'turn:turn.example.com:3478?transport=udp'). AWS offers no managed TURN; requires realtime_webrtc_turn_username and realtime_webrtc_turn_password."
+  type        = string
+  default     = null
+}
+variable "realtime_webrtc_turn_username" {
+  description = "Long-term credential username of realtime_webrtc_turn_server."
+  type        = string
+  default     = null
+}
+variable "realtime_webrtc_turn_password" {
+  description = "Long-term credential password of realtime_webrtc_turn_server, delivered to the task as an ECS secret backed by an encrypted SSM parameter."
+  type        = string
+  default     = null
+  sensitive   = true
+}
+variable "realtime_webrtc_udp_port_range" {
+  description = "UDP port range opened for WebRTC call media. Media sockets are bound by the OS from its ephemeral range, so the opened range must cover it; the default matches the Linux kernel default (net.ipv4.ip_local_port_range)."
+  type = object({
+    from = number
+    to   = number
+  })
+  default = {
+    from = 32768
+    to   = 60999
+  }
+  validation {
+    condition     = var.realtime_webrtc_udp_port_range.from >= 1024 && var.realtime_webrtc_udp_port_range.to <= 65535 && var.realtime_webrtc_udp_port_range.from <= var.realtime_webrtc_udp_port_range.to
+    error_message = "realtime_webrtc_udp_port_range must be an ordered range within 1024-65535."
+  }
+}
+variable "realtime_webrtc_ingress_ipv4_cidrs" {
+  description = "IPv4 CIDR blocks allowed to send WebRTC call media to the task. Defaults to the whole internet, which is what serving arbitrary browsers requires; narrow it to your callers' networks whenever they are known."
+  type        = list(string)
+  default     = ["0.0.0.0/0"]
+}
+variable "realtime_webrtc_ingress_ipv6_cidrs" {
+  description = "IPv6 CIDR blocks allowed to send WebRTC call media to the task, applied when the VPC has IPv6 enabled. Defaults to the whole internet; narrow it to your callers' networks whenever they are known."
+  type        = list(string)
+  default     = ["::/0"]
+}
+variable "realtime_webrtc_allow_private_candidates" {
+  description = "Accept the ICE candidates a WebRTC caller offers on addresses that are not globally routable: private (RFC 1918), shared (RFC 6598), loopback and link-local ones. They are dropped by default and an offer left with no candidate at all is refused, which is what keeps a caller holding nothing but an ephemeral client secret from aiming the task's UDP connectivity checks at addresses inside the deployment's own VPC. Enable it only where the callers legitimately share that network, such as a same-VPC or on-premises deployment. Hostname and mDNS ('.local') candidates are dropped either way: resolving one is itself a lookup on the deployment's network. Requires realtime_webrtc_media_enabled. Default to the application default (false)."
+  type        = bool
+  default     = null
+
+  validation {
+    condition     = var.realtime_webrtc_allow_private_candidates != true || var.realtime_webrtc_media_enabled
+    error_message = "realtime_webrtc_allow_private_candidates requires realtime_webrtc_media_enabled: with no WebRTC media path there is no offer to screen, and the server refuses the combination at startup."
+  }
+}
