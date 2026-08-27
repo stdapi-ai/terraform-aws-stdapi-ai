@@ -94,6 +94,7 @@ module "server" {
           OPENAI_ROUTES_PREFIX                     = var.openai_routes_prefix
           ANTHROPIC_ROUTES_PREFIX                  = var.anthropic_routes_prefix
           COHERE_ROUTES_PREFIX                     = var.cohere_routes_prefix
+          OLLAMA_ROUTES_PREFIX                     = var.ollama_routes_prefix
           API_KEY_SSM_PARAMETER                    = var.api_key_ssm_parameter
           API_KEY_SECRETSMANAGER_SECRET            = var.api_key_secretsmanager_secret
           API_KEY_SECRETSMANAGER_KEY               = var.api_key_secretsmanager_key

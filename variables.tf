@@ -653,6 +653,12 @@ variable "cohere_routes_prefix" {
   default     = null
 }
 
+variable "ollama_routes_prefix" {
+  description = "Ollama API compatible routes prefix. Default to the root, where Ollama clients expect '/api/*'."
+  type        = string
+  default     = null
+}
+
 variable "aws_bedrock_allow_guardrail_override" {
   description = "Allow users to override the global guardrail configuration at request level using headers (X-Amzn-Bedrock-GuardrailIdentifier, X-Amzn-Bedrock-GuardrailVersion, X-Amzn-Bedrock-Trace). When disabled and a global guardrail is configured, request headers are ignored for security. Defaults to false for security."
   type        = bool
