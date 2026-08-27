@@ -369,6 +369,59 @@ variable "aws_bedrock_allow_marketplace_endpoint_arn" {
   default     = null
 }
 
+variable "aws_sagemaker_endpoints" {
+  description = <<-EOT
+    Amazon SageMaker AI endpoints published as chat models, keyed by the model ID clients name them with. The module never creates an endpoint: it only grants the server the permissions to invoke the ones you name.
+
+    The endpoint's container must serve the OpenAI Chat Completions API, which the SageMaker AI vLLM and SGLang containers do. An endpoint is billed by the instance-hour rather than by the token, so the tokens it serves are reported without a cost; one configured to scale to zero costs nothing while idle, at the price of a slow first request.
+
+    Fields: "endpoint" (name, never the ARN) and "region" are required; "inference_component" is required for a component-hosted endpoint, which a scale-to-zero one always is; "name", "provider" and "input_modalities" are optional catalogue metadata.
+
+    Example: {
+      "my-qwen3": {
+        endpoint            = "my-endpoint"
+        region              = "us-east-1"
+        inference_component = "my-inference-component"
+        name                = "Qwen3 1.7B"
+        provider            = "Qwen"
+      }
+    }
+  EOT
+  type = map(object({
+    endpoint            = string
+    region              = string
+    inference_component = optional(string)
+    name                = optional(string)
+    provider            = optional(string)
+    input_modalities    = optional(list(string))
+  }))
+  default = null
+}
+
+variable "aws_sagemaker_warmup_timeout" {
+  description = <<-EOT
+    Seconds a request may wait for an Amazon SageMaker AI endpoint that has scaled to zero to provision capacity again. The request that finds the endpoint cold is what makes SageMaker AI scale it back up, so the server holds the connection and retries instead of failing, and concurrent callers share one wait.
+
+    Set to 0 to disable the wait and fail immediately. Cannot exceed var.ai_response_timeout. Default to 600.
+  EOT
+  type        = number
+  default     = null
+  validation {
+    condition     = var.aws_sagemaker_warmup_timeout == null || try(var.aws_sagemaker_warmup_timeout >= 0, false)
+    error_message = "Must be zero or greater, or null."
+  }
+}
+
+variable "aws_sagemaker_endpoint_url" {
+  description = "Override for the Amazon SageMaker AI runtime endpoint URL, with '{region}' substituted per region. Only needed to reach the runtime through a VPC endpoint or an inspection proxy; the correct host for every AWS partition is resolved automatically otherwise."
+  type        = string
+  default     = null
+  validation {
+    condition     = var.aws_sagemaker_endpoint_url == null || startswith(coalesce(var.aws_sagemaker_endpoint_url, "https://"), "https://")
+    error_message = "Must use the https:// scheme."
+  }
+}
+
 variable "aws_bedrock_guardrail_identifier" {
   description = "Amazon Bedrock Guardrails ID."
   type        = string

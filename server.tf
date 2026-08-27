@@ -145,6 +145,8 @@ module "server" {
           AWS_BEDROCK_MARKETPLACE_AUTO_SUBSCRIBE                 = var.aws_bedrock_marketplace_auto_subscribe
           AWS_BEDROCK_MARKETPLACE_ENDPOINTS_ENABLED              = var.aws_bedrock_marketplace_endpoints_enabled
           AWS_BEDROCK_ALLOW_MARKETPLACE_ENDPOINT_ARN             = var.aws_bedrock_allow_marketplace_endpoint_arn
+          AWS_SAGEMAKER_WARMUP_TIMEOUT                           = var.aws_sagemaker_warmup_timeout
+          AWS_SAGEMAKER_ENDPOINT_URL                             = var.aws_sagemaker_endpoint_url
           AWS_BEDROCK_ALLOW_CROSS_REGION_INFERENCE_PROFILE_ARN   = var.aws_bedrock_allow_cross_region_inference_profile_arn
           AWS_BEDROCK_ALLOW_APPLICATION_INFERENCE_PROFILE_ARN    = var.aws_bedrock_allow_application_inference_profile_arn
           AWS_BEDROCK_ALLOW_PROMPT_ROUTER_ARN                    = var.aws_bedrock_allow_prompt_router_arn
@@ -214,6 +216,7 @@ module "server" {
           AWS_TRANSCRIBE_STREAM_LANGUAGES   = var.aws_transcribe_stream_languages
           COST_PRICE_OVERRIDES              = var.cost_price_overrides
           PROXY_TRUSTED_HOSTS               = local.proxy_trusted_hosts
+          AWS_SAGEMAKER_ENDPOINTS           = local.sagemaker_endpoints
         } : k => jsonencode(v) if v != null }
       )
       secrets = merge(
@@ -264,6 +267,19 @@ module "server" {
 #  Not adjustable through Service Quotas, and whitespace does not count toward it.
 locals {
   iam_managed_policy_max_characters = 6144
+
+  # Optional object attributes render as JSON nulls, which the server rejects as
+  # a wrong type rather than reading as "not set": drop them before encoding.
+  sagemaker_endpoints = var.aws_sagemaker_endpoints == null ? null : {
+    for model_id, endpoint in var.aws_sagemaker_endpoints :
+    model_id => { for field, value in endpoint : field => value if value != null }
+  }
+
+  # Every endpoint the server may invoke, as the ARN its region and name make.
+  sagemaker_endpoint_arns = distinct([
+    for endpoint in values(coalesce(var.aws_sagemaker_endpoints, {})) :
+    "arn:${data.aws_partition.current.partition}:sagemaker:${endpoint.region}:${data.aws_caller_identity.current.account_id}:endpoint/${endpoint.endpoint}"
+  ])
 }
 
 resource "aws_iam_policy" "server" {
@@ -502,6 +518,31 @@ data "aws_iam_policy_document" "server" {
         variable = "aws:CalledViaLast"
         values   = ["bedrock.amazonaws.com"]
       }
+    }
+  }
+
+  # SageMaker AI - Endpoints (Optional)
+  # Invocation only: the server never creates, updates, scales or deletes an
+  # endpoint, so no mutating SageMaker AI action is granted. The OpenAI-compatible
+  # route authenticates with a short-term API key derived locally from the task
+  # role, which sagemaker:CallWithBearerToken authorizes and which supports no
+  # resource-level scope; that key carries the role's authority, so the narrow
+  # sagemaker:InvokeEndpoint below is what bounds a leaked one.
+  dynamic "statement" {
+    for_each = length(local.sagemaker_endpoint_arns) > 0 ? [1] : []
+    content {
+      sid       = "SageMakerBearerToken"
+      actions   = ["sagemaker:CallWithBearerToken"]
+      resources = ["*"]
+    }
+  }
+
+  dynamic "statement" {
+    for_each = length(local.sagemaker_endpoint_arns) > 0 ? [1] : []
+    content {
+      sid       = "SageMakerEndpointInvoke"
+      actions   = ["sagemaker:InvokeEndpoint"]
+      resources = local.sagemaker_endpoint_arns
     }
   }
 
