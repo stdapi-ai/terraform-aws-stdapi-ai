@@ -6,8 +6,10 @@ module "server" {
   source = "JGoutin/ecs-fargate/aws"
   # 1.4 is the first release that deletes the Container Insights log group the ECS
   # service-linked role recreates after the cluster is gone, and that redeploys the
-  # service when its capacity provider strategy or its secrets change.
-  version                           = "~> 1.4"
+  # service when its capacity provider strategy or its secrets change. 1.4.4 is the
+  # first that keeps every prefix-derived name within its AWS limit, the rule
+  # bedrock_user_role.tf reconstructs the task role's name from.
+  version                           = ">= 1.4.4, < 2.0.0"
   tags                              = local.apn_tags
   kms_key_id                        = module.kms_key.id
   kms_policy_dependency             = module.kms_key.policy_dependency
@@ -66,7 +68,7 @@ module "server" {
           AWS_BEDROCK_GUARDRAIL_VERSION            = var.aws_bedrock_guardrail_version
           AWS_BEDROCK_GUARDRAIL_TRACE              = var.aws_bedrock_guardrail_trace
           AWS_BEDROCK_SESSION_ENCRYPTION_KEY_ARN   = var.aws_bedrock_session_encryption_key_arn
-          AWS_BEDROCK_USER_ROLE_ARN                = var.aws_bedrock_user_role_arn
+          AWS_BEDROCK_USER_ROLE_ARN                = local.bedrock_user_role_arn
           AWS_BEDROCK_USER_ROLE_SESSION_DURATION   = var.aws_bedrock_user_role_session_duration
           AWS_BEDROCK_USER_ROLE_TAG_KEY            = var.aws_bedrock_user_role_tag_key
           AWS_BEDROCK_USER_ROLE_REQUIRE_IDENTITY   = var.aws_bedrock_user_role_require_identity
@@ -662,14 +664,14 @@ data "aws_iam_policy_document" "server_services" {
   # end user. Tagging the session is a separate action from assuming the role,
   # and the role's own trust policy must allow both.
   dynamic "statement" {
-    for_each = var.aws_bedrock_user_role_arn != null ? [1] : []
+    for_each = local.bedrock_user_role_arn != null ? [1] : []
     content {
       sid = "EndUserRoleSessions"
       actions = [
         "sts:AssumeRole",
         "sts:TagSession",
       ]
-      resources = [var.aws_bedrock_user_role_arn]
+      resources = [local.bedrock_user_role_arn]
     }
   }
 

@@ -175,8 +175,14 @@ variable "aws_bedrock_allow_mantle_project_override" {
   default     = null
 }
 
+variable "aws_bedrock_user_role_create" {
+  description = "If true, create the IAM role the server assumes once per end user, so AWS reports Amazon Bedrock model usage per end user in Cost Explorer and the Cost and Usage Report. Reporting also requires activating the session tag key named by aws_bedrock_user_role_tag_key as a cost allocation tag of type 'IAM principal', in the Billing console. The created role trusts this module's task role alone, and may only invoke models and built-in tools, apply guardrails, run the built-in web search (reaching the public web only when aws_bedrock_external_web_access is enabled), invoke Marketplace model endpoints through Amazon Bedrock when aws_bedrock_marketplace_endpoints_enabled is set, and read from this deployment's own S3 buckets the media an invocation references by S3 URI instead of carrying inline, which Amazon Bedrock reads under the end user's session. Only model invocations carry the end user session: usage served through Amazon Bedrock Mantle is attributed by project (aws_bedrock_mantle_project), and speech, transcription, translation, video and every other service keeps the task role's identity. Its ARN is returned as the 'bedrock_user_role_arn' output. Only used when aws_bedrock_user_role_arn is not specified. When aws_bedrock_user_role_arn is specified, this value is ignored. Default to false (all usage reported under the task role)."
+  type        = bool
+  default     = false
+}
+
 variable "aws_bedrock_user_role_arn" {
-  description = "ARN of an IAM role the server assumes once per end user, so AWS reports Amazon Bedrock model usage per end user in Cost Explorer and the Cost and Usage Report. The role's trust policy must allow this module's task role to call both 'sts:AssumeRole' and 'sts:TagSession' on it; this module grants the task role those two actions on this ARN. Default to none (all usage reported under the task role)."
+  description = "ARN of an existing IAM role the server assumes once per end user, so AWS reports Amazon Bedrock model usage per end user in Cost Explorer and the Cost and Usage Report. The role's trust policy must allow this module's task role to call both 'sts:AssumeRole' and 'sts:TagSession' on it; this module grants the task role those two actions on this ARN. Only model invocations carry the end user session: usage served through Amazon Bedrock Mantle is attributed by project (aws_bedrock_mantle_project), and every other service keeps the task role's identity. When specified, takes precedence over aws_bedrock_user_role_create. Default to none, meaning a role is created when aws_bedrock_user_role_create is true, and all usage is reported under the task role otherwise."
   type        = string
   default     = null
 
@@ -187,7 +193,7 @@ variable "aws_bedrock_user_role_arn" {
 }
 
 variable "aws_bedrock_user_role_session_duration" {
-  description = "Lifetime in seconds of a per-end-user role session obtained with aws_bedrock_user_role_arn, from 900 to 3600. The ceiling is imposed by AWS: a role session obtained from another role session cannot last longer than one hour. Default to 3600."
+  description = "Lifetime in seconds of a per-end-user role session, from 900 to 3600. The ceiling is imposed by AWS: a role session obtained from another role session cannot last longer than one hour. Default to 3600."
   type        = number
   default     = null
 
@@ -204,7 +210,7 @@ variable "aws_bedrock_user_role_tag_key" {
 }
 
 variable "aws_bedrock_user_role_require_identity" {
-  description = "If true, reject a model request that identifies no end user instead of running it under the server's own identity. Requires aws_bedrock_user_role_arn. Default to false."
+  description = "If true, reject a model request that identifies no end user instead of running it under the server's own identity. Requires aws_bedrock_user_role_create or aws_bedrock_user_role_arn. Default to false."
   type        = bool
   default     = null
 }

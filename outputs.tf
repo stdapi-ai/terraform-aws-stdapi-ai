@@ -78,6 +78,13 @@ output "bedrock_batch_role_arn" {
   value       = local.bedrock_batch_role_arn
 }
 
+# Per-end-user cost attribution
+
+output "bedrock_user_role_arn" {
+  description = "ARN of the IAM role the server assumes once per end user, whether created by this module or supplied through aws_bedrock_user_role_arn, or null when per-end-user cost attribution is disabled. Activate the session tag key named by aws_bedrock_user_role_tag_key as a cost allocation tag of type 'IAM principal' to group Amazon Bedrock costs per end user."
+  value       = local.bedrock_user_role_arn
+}
+
 # Other outputs that may be required by the user
 
 output "api_key" {
