@@ -514,7 +514,7 @@ data "aws_iam_policy_document" "server" {
         "sagemaker:InvokeEndpoint",
         "sagemaker:InvokeEndpointWithResponseStream"
       ]
-      resources = ["arn:aws:sagemaker:*:${data.aws_caller_identity.current.account_id}:endpoint/*"]
+      resources = ["arn:${data.aws_partition.current.partition}:sagemaker:*:${data.aws_caller_identity.current.account_id}:endpoint/*"]
       condition {
         test     = "StringEquals"
         variable = "aws:CalledViaLast"
