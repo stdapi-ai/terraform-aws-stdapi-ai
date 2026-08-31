@@ -5,7 +5,7 @@
 
 **Deploy an OpenAI, Anthropic & Cohere compatible AI gateway on AWS.** ECS Fargate infrastructure with auto-scaling, private subnets, KMS encryption and least-privilege IAM by default; HTTPS, WAF, API key authentication and CloudWatch alarms are opt-in inputs — see [What this minimal configuration deploys](#minimal-deployment) and [What gets provisioned, and when](#what-gets-provisioned-and-when).
 
-🌐 [Documentation](https://stdapi.ai) · 🚀 [Start 14-Day Free Trial](https://aws.amazon.com/marketplace/pp/prodview-su2dajk5zawpo) · 💻 [GitHub Repository](https://github.com/stdapi-ai/stdapi.ai)
+🌐 [Documentation](https://stdapi.ai/?utm_source=terraform-readme&utm_medium=repo&utm_campaign=owned-surfaces) · 🚀 [Start 14-Day Free Trial](https://aws.amazon.com/marketplace/pp/prodview-su2dajk5zawpo) · 💻 [GitHub Repository](https://github.com/stdapi-ai/stdapi.ai)
 
 ## Quick Start
 
@@ -64,15 +64,15 @@ module "stdapi_ai" {
 }
 ```
 
-For ready-to-deploy variants (single-region, EU/US multi-region, Open WebUI), see the [**samples repository**](https://github.com/stdapi-ai/samples). For deeper patterns (BYO VPC / ALB / Route 53 / S3, manual ECS, cost-optimized), see the [**advanced deployment guide**](https://stdapi.ai/operations_deploy_advanced/).
+For ready-to-deploy variants (single-region, EU/US multi-region, Open WebUI), see the [**samples repository**](https://github.com/stdapi-ai/samples). For deeper patterns (BYO VPC / ALB / Route 53 / S3, manual ECS, cost-optimized), see the [**advanced deployment guide**](https://stdapi.ai/operations_deploy_advanced/?utm_source=terraform-readme&utm_medium=repo&utm_campaign=owned-surfaces).
 
 ## License and Cost
 
-stdapi.ai is dual-licensed: [**AGPL-3.0-or-later**](LICENSE-AGPL) for the free community container image, or a [**commercial license**](LICENSE-COMMERCIAL) obtained by subscribing on AWS Marketplace. **This module is commercial-only by construction** — it deploys the Marketplace ECR image, so an active Marketplace subscription is required. To run the AGPL community image instead, see the [local deployment guide](https://stdapi.ai/operations_getting_started_local/).
+stdapi.ai is dual-licensed: [**AGPL-3.0-or-later**](LICENSE-AGPL) for the free community container image, or a [**commercial license**](LICENSE-COMMERCIAL) obtained by subscribing on AWS Marketplace. **This module is commercial-only by construction** — it deploys the Marketplace ECR image, so an active Marketplace subscription is required. To run the AGPL community image instead, see the [local deployment guide](https://stdapi.ai/operations_getting_started_local/?utm_source=terraform-readme&utm_medium=repo&utm_campaign=owned-surfaces).
 
 The Marketplace license is metered at **$0.10 per container-hour**, with a **14-day free trial** on the license. `autoscaling_min_capacity` defaults to one task per availability zone and `availability_zones_count` defaults to all AZs in the region, so a default deployment in a 3-AZ region runs 3 tasks — about **$216/month in license** (720 h × $0.10 × 3), and about $432/month in a 6-AZ region such as `us-east-1`. Set `availability_zones_count` and `autoscaling_min_capacity` explicitly to control this.
 
-Only the license is covered by the trial. AWS resources this module creates (Fargate, ALB, NAT gateways, KMS, CloudWatch, S3, SQS) and Amazon Bedrock inference are billed by AWS from the first hour, with no markup. Of those, the indexing queues are the one resource with no standing charge at all: [Amazon SQS bills per request](https://aws.amazon.com/sqs/pricing/), an idle queue costs nothing, and indexing a file is a handful of requests. See the [cost management guide](https://stdapi.ai/operations_cost_management/) and the [licensing guide](https://stdapi.ai/operations_licensing/).
+Only the license is covered by the trial. AWS resources this module creates (Fargate, ALB, NAT gateways, KMS, CloudWatch, S3, SQS) and Amazon Bedrock inference are billed by AWS from the first hour, with no markup. Of those, the indexing queues are the one resource with no standing charge at all: [Amazon SQS bills per request](https://aws.amazon.com/sqs/pricing/), an idle queue costs nothing, and indexing a file is a handful of requests. See the [cost management guide](https://stdapi.ai/operations_cost_management/?utm_source=terraform-readme&utm_medium=repo&utm_campaign=owned-surfaces) and the [licensing guide](https://stdapi.ai/operations_licensing/?utm_source=terraform-readme&utm_medium=repo&utm_campaign=owned-surfaces).
 
 ## Module Features
 
@@ -165,23 +165,23 @@ Ready-to-deploy Terraform examples live in the [**stdapi.ai samples repository**
 | [getting_started_production_us](https://github.com/stdapi-ai/samples/tree/main/getting_started_production_us) | Multi-region US deployment (3 regions) for high availability |
 | [getting_started_openwebui](https://github.com/stdapi-ai/samples/tree/main/getting_started_openwebui) | Full Open WebUI chat platform stack (Aurora + Valkey + SearXNG + stdapi.ai) |
 
-For integration against existing infrastructure and non-Terraform deployments, see the [advanced deployment guide](https://stdapi.ai/operations_deploy_advanced/).
+For integration against existing infrastructure and non-Terraform deployments, see the [advanced deployment guide](https://stdapi.ai/operations_deploy_advanced/?utm_source=terraform-readme&utm_medium=repo&utm_campaign=owned-surfaces).
 
 ## Documentation
 
 | Resource | Description |
 |---|---|
-| **[Getting Started](https://stdapi.ai/operations_getting_started/)** | Deployment examples and first API call |
-| **[Advanced Deployment](https://stdapi.ai/operations_deploy_advanced/)** | VPC integration, multi-region, cost optimization |
-| **[Configuration](https://stdapi.ai/operations_configuration/)** | All environment variables and module parameters |
-| **[API Reference](https://stdapi.ai/api_overview/)** | OpenAI & Anthropic compatible API documentation |
-| **[Use Cases](https://stdapi.ai/use_cases/)** | Open WebUI, n8n, coding assistants, and more |
-| **[Features](https://stdapi.ai/features/)** | Full product capabilities |
-| **[Cost Management](https://stdapi.ai/operations_cost_management/)** | License metering, AWS resource costs, and per-request cost estimation |
-| **[Resilience & Failover](https://stdapi.ai/operations_resilience/)** | Multi-region routing, retry scope, and what does not fail over |
-| **[Licensing](https://stdapi.ai/operations_licensing/)** | AGPL-3.0 community edition vs the Marketplace commercial license |
-| **[Compliance](https://stdapi.ai/operations_compliance/)** | Data residency, region allow-lists, encryption, and outbound paths |
-| **[IAM Permissions](https://stdapi.ai/operations_iam_permissions/)** | Task-role permissions the running gateway needs, for custom deployments and policy auditing |
+| **[Getting Started](https://stdapi.ai/operations_getting_started/?utm_source=terraform-readme&utm_medium=repo&utm_campaign=owned-surfaces)** | Deployment examples and first API call |
+| **[Advanced Deployment](https://stdapi.ai/operations_deploy_advanced/?utm_source=terraform-readme&utm_medium=repo&utm_campaign=owned-surfaces)** | VPC integration, multi-region, cost optimization |
+| **[Configuration](https://stdapi.ai/operations_configuration/?utm_source=terraform-readme&utm_medium=repo&utm_campaign=owned-surfaces)** | All environment variables and module parameters |
+| **[API Reference](https://stdapi.ai/api_overview/?utm_source=terraform-readme&utm_medium=repo&utm_campaign=owned-surfaces)** | OpenAI & Anthropic compatible API documentation |
+| **[Use Cases](https://stdapi.ai/use_cases/?utm_source=terraform-readme&utm_medium=repo&utm_campaign=owned-surfaces)** | Open WebUI, n8n, coding assistants, and more |
+| **[Features](https://stdapi.ai/features/?utm_source=terraform-readme&utm_medium=repo&utm_campaign=owned-surfaces)** | Full product capabilities |
+| **[Cost Management](https://stdapi.ai/operations_cost_management/?utm_source=terraform-readme&utm_medium=repo&utm_campaign=owned-surfaces)** | License metering, AWS resource costs, and per-request cost estimation |
+| **[Resilience & Failover](https://stdapi.ai/operations_resilience/?utm_source=terraform-readme&utm_medium=repo&utm_campaign=owned-surfaces)** | Multi-region routing, retry scope, and what does not fail over |
+| **[Licensing](https://stdapi.ai/operations_licensing/?utm_source=terraform-readme&utm_medium=repo&utm_campaign=owned-surfaces)** | AGPL-3.0 community edition vs the Marketplace commercial license |
+| **[Compliance](https://stdapi.ai/operations_compliance/?utm_source=terraform-readme&utm_medium=repo&utm_campaign=owned-surfaces)** | Data residency, region allow-lists, encryption, and outbound paths |
+| **[IAM Permissions](https://stdapi.ai/operations_iam_permissions/?utm_source=terraform-readme&utm_medium=repo&utm_campaign=owned-surfaces)** | Task-role permissions the running gateway needs, for custom deployments and policy auditing |
 
 ## AWS Qualified Software
 
