@@ -268,6 +268,16 @@ module "server" {
 locals {
   iam_managed_policy_max_characters = 6144
 
+  # Measured re-encoded, not as rendered: the provider indents its JSON and IAM
+  # ignores whitespace, so the rendered form is about a third longer than what
+  # the quota counts -- long enough to refuse a policy IAM would accept.
+  server_policy_characters = length(
+    jsonencode(jsondecode(data.aws_iam_policy_document.server.json))
+  )
+  server_services_policy_characters = length(
+    jsonencode(jsondecode(data.aws_iam_policy_document.server_services.json))
+  )
+
   # Optional object attributes render as JSON nulls, which the server rejects as
   # a wrong type rather than reading as "not set": drop them before encoding.
   sagemaker_endpoints = var.aws_sagemaker_endpoints == null ? null : {
@@ -292,8 +302,8 @@ resource "aws_iam_policy" "server" {
   # exceed quota for PolicySize: 6144" halfway through an apply.
   lifecycle {
     precondition {
-      condition     = length(data.aws_iam_policy_document.server.json) <= local.iam_managed_policy_max_characters
-      error_message = "The Amazon Bedrock policy renders ${length(data.aws_iam_policy_document.server.json)} characters, over IAM's ${local.iam_managed_policy_max_characters}-character limit for a managed policy. Move one of its statements into a further policy rather than widening the actions of another."
+      condition     = local.server_policy_characters <= local.iam_managed_policy_max_characters
+      error_message = "The Amazon Bedrock policy renders ${local.server_policy_characters} characters, over IAM's ${local.iam_managed_policy_max_characters}-character limit for a managed policy. Move one of its statements into a further policy rather than widening the actions of another."
     }
   }
 }
@@ -305,8 +315,8 @@ resource "aws_iam_policy" "server_services" {
 
   lifecycle {
     precondition {
-      condition     = length(data.aws_iam_policy_document.server_services.json) <= local.iam_managed_policy_max_characters
-      error_message = "The supporting-services policy renders ${length(data.aws_iam_policy_document.server_services.json)} characters, over IAM's ${local.iam_managed_policy_max_characters}-character limit for a managed policy. Move one of its statements into a further policy rather than widening the actions of another."
+      condition     = local.server_services_policy_characters <= local.iam_managed_policy_max_characters
+      error_message = "The supporting-services policy renders ${local.server_services_policy_characters} characters, over IAM's ${local.iam_managed_policy_max_characters}-character limit for a managed policy. Move one of its statements into a further policy rather than widening the actions of another."
     }
   }
 }
