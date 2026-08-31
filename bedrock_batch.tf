@@ -62,7 +62,7 @@ resource "aws_iam_role" "batch" {
   count              = local.create_bedrock_batch_role ? 1 : 0
   name               = "${local.name}-batch"
   assume_role_policy = data.aws_iam_policy_document.batch_assume_role[0].json
-  tags               = local.apn_tags
+  tags               = local.tags
 }
 
 data "aws_iam_policy_document" "batch" {

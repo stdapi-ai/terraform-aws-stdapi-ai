@@ -46,6 +46,18 @@ locals {
   )
 }
 
+# ACM validates a domain by publishing a DNS record the public resolvers must answer, which a
+# private hosted zone cannot do, so alb_certificate_create is silently inert against one. The
+# result applies cleanly and serves plain HTTP on port 80, with no 443 listener and no redirect.
+# A warning rather than an error: a plaintext listener inside a VPC is a shape somebody may
+# genuinely want, and refusing it would break a deployment that works today.
+check "private_zone_has_no_certificate" {
+  assert {
+    condition     = !(local.dns_enabled && var.alb_route53_zone_private && var.alb_certificate_create && var.alb_certificate_arn == null)
+    error_message = "alb_certificate_create cannot issue a certificate into the private hosted zone alb_route53_zone_private selects: ACM validates by publishing a public DNS record. This deployment will serve plain HTTP on port 80 with no HTTPS listener. Set alb_certificate_arn to a certificate you already hold, or use a public zone."
+  }
+}
+
 # ACM Certificate (only for public zones when certificate_create is true)
 resource "aws_acm_certificate" "main" {
   count             = local.dns_enabled && !var.alb_route53_zone_private && var.alb_certificate_create ? 1 : 0
@@ -56,7 +68,7 @@ resource "aws_acm_certificate" "main" {
     create_before_destroy = true
   }
 
-  tags = merge(local.apn_tags, { Name = local.name })
+  tags = merge(local.tags, { Name = local.name })
 }
 
 # Route 53 records for ACM DNS validation (only for public zones when certificate_create is true)

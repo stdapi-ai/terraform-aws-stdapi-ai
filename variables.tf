@@ -1,9 +1,38 @@
 # Global configuration
 
 variable "name_prefix" {
-  description = "Prefix to add to all created resources names."
+  description = "Prefix to add to all created resources names. Every created name is \"<name_prefix>-<8 hexadecimal characters>-<region>\", so a long prefix reaches the length limit of the name it is longest in: 22 characters is the most any region accepts, and 13 when alb_enabled is true. Both assume the shortest region name AWS publishes, nine characters, and a longer one lowers them at different rates: the 22 by two characters per extra character (the bound is 40 minus twice the region name length, because the VPC flow log role name repeats the region), the 13 by one (22 minus the region name length)."
   type        = string
   default     = "stdapiai"
+
+  # The 8 hexadecimal characters are random_id.main, unknown until apply, which leaves every derived
+  # name unknown at plan time and every provider-side length check firing mid-apply, with most of the
+  # deployment already created. Bound the prefix here instead, where the check is the plan's.
+  #
+  # Both bounds assume the shortest region name AWS publishes, 9 characters, so they reject only a
+  # prefix that is too long in every region and never a deployment that works today. The check block
+  # in main.tf reports the deployment's own region, where the real ceiling is lower.
+
+  validation {
+    condition     = length(var.name_prefix) <= 22
+    error_message = "Must be 22 characters or less: the VPC flow log IAM role name repeats the region and caps at IAM's 64 characters."
+  }
+
+  validation {
+    condition     = !var.alb_enabled || length(var.name_prefix) <= 13
+    error_message = "Must be 13 characters or less when alb_enabled is true: the load balancer and its target group cap at 32 characters."
+  }
+}
+
+variable "tags" {
+  description = "Tags applied to every resource this module creates, on top of the tags it sets itself. Use these for cost allocation, ownership or environment. The 'aws-apn-id' tag is reserved: it attributes the deployment to the AWS Marketplace product and is merged last, so an entry of that key here is ignored."
+  type        = map(string)
+  default     = {}
+
+  validation {
+    condition     = !contains(keys(var.tags), "aws-apn-id")
+    error_message = "The 'aws-apn-id' tag is set by this module to attribute the deployment to its AWS Marketplace product and cannot be overridden."
+  }
 }
 
 # Application Configuration
@@ -56,6 +85,8 @@ variable "aws_s3_regional_buckets_create" {
   description = <<-EOT
     If true (default), create regional S3 buckets and per-region KMS keys for every region in `aws_bedrock_regions`
     not already present as a key of `aws_s3_regional_buckets` and not equal to the provider's primary region.
+
+    Has no effect while `aws_bedrock_regions` is unset: with no second region there is no region to create a bucket for.
 
     Set to false to disable automatic creation (for example, if you manage these buckets out-of-band).
   EOT
@@ -207,6 +238,18 @@ variable "aws_bedrock_user_role_tag_key" {
   description = "Session tag key carrying the end user identity on per-end-user role sessions. Activate it as a cost allocation tag of type 'IAM principal' to group Bedrock costs per end user, and test it in IAM policies as 'aws:PrincipalTag/<key>'. Default to 'user'."
   type        = string
   default     = null
+
+  # Mirrors the server's own refusal, so a key AWS STS rejects fails the plan rather than
+  # applying cleanly into a task that never boots.
+  validation {
+    condition     = var.aws_bedrock_user_role_tag_key == null || can(regex("^[0-9A-Za-z_.:/=+@ -]{1,128}$", var.aws_bedrock_user_role_tag_key))
+    error_message = "Must be 1 to 128 characters, letters, digits, spaces or _ . : / = + - @"
+  }
+
+  validation {
+    condition     = var.aws_bedrock_user_role_tag_key == null || !startswith(lower(var.aws_bedrock_user_role_tag_key), "aws:")
+    error_message = "Keys beginning with \"aws:\" are reserved by AWS."
+  }
 }
 
 variable "aws_bedrock_user_role_require_identity" {
@@ -367,6 +410,16 @@ variable "aws_bedrock_marketplace_endpoint_regions" {
   description = "Regions searched for Amazon Bedrock Marketplace model endpoints. Every region listed must also appear in var.aws_bedrock_regions. Default to every var.aws_bedrock_regions region."
   type        = list(string)
   default     = null
+
+  # Only checked against an explicit list: left unset, var.aws_bedrock_regions resolves to the
+  # deployment region, which a variable validation cannot read.
+  validation {
+    condition = var.aws_bedrock_marketplace_endpoint_regions == null || var.aws_bedrock_regions == null || alltrue([
+      for region in coalesce(var.aws_bedrock_marketplace_endpoint_regions, []) :
+      contains(coalesce(var.aws_bedrock_regions, []), region)
+    ])
+    error_message = "Every region listed must also appear in aws_bedrock_regions: a Marketplace endpoint is only reachable in its own region, so one this deployment does not otherwise serve could never answer."
+  }
 }
 
 variable "aws_bedrock_allow_marketplace_endpoint_arn" {
@@ -402,6 +455,44 @@ variable "aws_sagemaker_endpoints" {
     input_modalities    = optional(list(string))
   }))
   default = null
+
+  # Every field below lands in an IAM resource ARN or in the model catalogue, where a malformed
+  # value is not refused: the ARN is simply one nothing matches, and the apply either fails on
+  # MalformedPolicyDocument or succeeds into a deployment that answers AccessDenied at runtime.
+
+  validation {
+    condition = alltrue([
+      for model_id, endpoint in coalesce(var.aws_sagemaker_endpoints, {}) :
+      !startswith(endpoint.endpoint, "arn:")
+    ])
+    error_message = "Each aws_sagemaker_endpoints endpoint is the endpoint name, never its ARN: an ARN would be nested inside the one this module grants, matching no endpoint."
+  }
+
+  validation {
+    condition = alltrue([
+      for model_id, endpoint in coalesce(var.aws_sagemaker_endpoints, {}) :
+      can(regex("^[a-zA-Z0-9](-*[a-zA-Z0-9]){0,62}$", endpoint.endpoint))
+    ])
+    error_message = "Each aws_sagemaker_endpoints endpoint must be an Amazon SageMaker AI endpoint name: 1 to 63 characters, letters, digits and '-'."
+  }
+
+  validation {
+    condition = alltrue([
+      for model_id, endpoint in coalesce(var.aws_sagemaker_endpoints, {}) :
+      can(regex("^[a-z]{2,4}(-[a-z]+)+-[0-9]$", endpoint.region))
+    ])
+    error_message = "Each aws_sagemaker_endpoints region must be an AWS region name, '<geography>-<direction>-<number>' such as 'us-east-1'."
+  }
+
+  validation {
+    condition = alltrue(flatten([
+      for model_id, endpoint in coalesce(var.aws_sagemaker_endpoints, {}) : [
+        for modality in coalesce(endpoint.input_modalities, []) :
+        contains(["TEXT", "IMAGE", "SPEECH"], upper(modality))
+      ]
+    ]))
+    error_message = "Each aws_sagemaker_endpoints input_modalities entry must be one of: TEXT, IMAGE, SPEECH."
+  }
 }
 
 variable "aws_sagemaker_warmup_timeout" {
@@ -415,6 +506,13 @@ variable "aws_sagemaker_warmup_timeout" {
   validation {
     condition     = var.aws_sagemaker_warmup_timeout == null || try(var.aws_sagemaker_warmup_timeout >= 0, false)
     error_message = "Must be zero or greater, or null."
+  }
+
+  # Compared against the application default when ai_response_timeout is unset, which is the value
+  # the server itself would compare against.
+  validation {
+    condition     = var.aws_sagemaker_warmup_timeout == null || try(var.aws_sagemaker_warmup_timeout <= coalesce(var.ai_response_timeout, 600), false)
+    error_message = "Cannot exceed ai_response_timeout (600 when unset): the wait happens before the model answers, so a longer one promises the caller time the deployment is not allowed to hold the connection for."
   }
 }
 
@@ -638,32 +736,12 @@ variable "aws_translate_region" {
   default     = null
 }
 
-variable "aws_dynamodb_table_create" {
-  description = "If true, create a shared DynamoDB table for the server's internal state. Only used when aws_dynamodb_table is not specified. When aws_dynamodb_table is specified, this value is ignored. Default to false (table not created)."
-  type        = bool
-  default     = false
-}
-
-variable "aws_dynamodb_table" {
-  description = "Existing DynamoDB table name backing the server's internal state. When specified, takes precedence over aws_dynamodb_table_create. If not specified and aws_dynamodb_table_create is true, a table will be created automatically."
-  type        = string
-  default     = null
-}
-
-variable "aws_dynamodb_table_kms_key_arn" {
-  description = "KMS key ARN encrypting the DynamoDB table specified in aws_dynamodb_table, or created by aws_dynamodb_table_create. The key's own policy, not this module, must grant DynamoDB permission to use it (see AWS's 'Key policy for a customer managed key' guidance); DynamoDB uses grants for ongoing access, so the ECS task role itself needs no KMS permission for table reads and writes. Default to none, which keeps the table on the AWS owned key: always-on encryption that needs no key policy of its own."
-  type        = string
-  default     = null
-}
-
-variable "aws_dynamodb_region" {
-  description = "AWS region holding the DynamoDB table specified in aws_dynamodb_table, or created by aws_dynamodb_table_create. A DynamoDB table is a regional resource, so this setting has no failover, unlike aws_polly_region and similar settings. Default to the region this module is deployed in."
-  type        = string
-  default     = null
-}
+# The shared DynamoDB table holding the tenant records and the shared models list has no settings
+# of its own: it is created with the first feature that needs it, in this deployment's region, on
+# this deployment's KMS key, and destroyed with the last of them. See dynamodb.tf.
 
 variable "tenants" {
-  description = "Per-tenant API keys, one entry per tenant keyed by the tenant's name. Terraform owns each tenant's record in the shared DynamoDB table — identity, model allow/deny lists, endpoint restrictions (glob patterns against route path templates such as '/v1/chat/completions'), the disabled flag, and optionally 'aws_role_arn', an IAM role of the tenant's own AWS account its model invocations then run under (its own Amazon Bedrock quota and bill) — and requires aws_dynamodb_table or aws_dynamodb_table_create. Declaring a role enables tenant AWS credentials on the server, grants the task role 'sts:AssumeRole' on exactly the declared roles, and cannot be combined with Amazon Bedrock Guardrails; the tenant must condition its role's trust policy on the ExternalId the server mints (read it from the tenant's 'secret#<key id>' record). The key secret never enters Terraform state: the server mints it and delivers it once through the SSM parameter named in the tenant_keys output. That parameter is a SecureString encrypted with this deployment's own KMS key, so reading the key also takes kms:Decrypt on that key and not merely ssm:GetParameter on the path: retrieve it and delete it as soon as it appears. An absent list restricts nothing; an empty list allows nothing; deny wins over allow. Default to no tenants, which leaves tenant API keys disabled."
+  description = "Per-tenant API keys, one entry per tenant keyed by the tenant's name. Terraform owns each tenant's record in the shared DynamoDB table — identity, model allow/deny lists, endpoint restrictions (glob patterns against route path templates such as '/v1/chat/completions'), the disabled flag, and optionally 'aws_role_arn', an IAM role of the tenant's own AWS account its model invocations then run under (its own Amazon Bedrock quota and bill) — in the shared DynamoDB table this module creates for the first tenant declared. Declaring a role enables tenant AWS credentials on the server, grants the task role 'sts:AssumeRole' on exactly the declared roles, and cannot be combined with Amazon Bedrock Guardrails; the tenant must condition its role's trust policy on the ExternalId the server mints (read it from the tenant's 'secret#<key id>' record). The key secret never enters Terraform state: the server mints it and delivers it once through the SSM parameter named in the tenant_keys output. That parameter is a SecureString encrypted with this deployment's own KMS key, so reading the key also takes kms:Decrypt on that key and not merely ssm:GetParameter on the path: retrieve it and delete it as soon as it appears. An absent list restricts nothing; an empty list allows nothing; deny wins over allow. Default to no tenants, which leaves tenant API keys disabled."
   type = map(object({
     models_allow    = optional(list(string))
     models_deny     = optional(list(string))
@@ -951,13 +1029,13 @@ variable "drop_unsupported_system_prompt" {
 }
 
 variable "tokens_estimation" {
-  description = "Deprecated and ignored since stdapi.ai v1.14.0: token estimation has been removed; only real AWS-billed usage is reported."
+  description = "Deprecated and ignored since stdapi.ai v1.14.0: token estimation has been removed and only real AWS-billed usage is reported. Accepted, and passed nowhere, so a configuration that still sets it keeps applying. Scheduled for removal in the next major version."
   type        = bool
   default     = null
 }
 
 variable "tokens_estimation_default_encoding" {
-  description = "Deprecated and ignored since stdapi.ai v1.14.0: token estimation has been removed."
+  description = "Deprecated and ignored since stdapi.ai v1.14.0: token estimation has been removed. Accepted, and passed nowhere, so a configuration that still sets it keeps applying. Scheduled for removal in the next major version."
   type        = string
   default     = null
 }
@@ -984,18 +1062,38 @@ variable "cloudwatch_metrics_user_dimension" {
   description = "If True, also publish the authenticated caller as a 'User' dimension on the usage metrics, which is what lets the usage API group by user_id. Stores one CloudWatch metric series per user, model and metric name, each billed as a custom metric, so its cost follows the size of your user population. Requires cloudwatch_metrics and usage_api. Default to false."
   type        = bool
   default     = null
+
+  validation {
+    condition     = var.cloudwatch_metrics_user_dimension != true || var.cloudwatch_metrics == true
+    error_message = "Requires cloudwatch_metrics = true: the User dimension is published on the usage metrics, and nothing publishes them otherwise."
+  }
+
+  validation {
+    condition     = var.cloudwatch_metrics_user_dimension != true || var.usage_api == true
+    error_message = "Requires usage_api = true: the per-user series it stores, and pays for, are only ever read by the usage API's group by user_id."
+  }
 }
 
 variable "cloudwatch_metrics_region" {
   description = "AWS region the usage API reads the published metrics from. Defaults to the region the server runs in, which is where its logs are ingested and therefore where the metrics exist. Only needs setting when the logs are shipped to another region."
   type        = string
   default     = null
+
+  validation {
+    condition     = var.cloudwatch_metrics_region == null || can(regex("^[a-z]{2,4}(-[a-z]+)+-[0-9]$", coalesce(var.cloudwatch_metrics_region, "us-east-1")))
+    error_message = "Must be an AWS region name, '<geography>-<direction>-<number>' such as 'us-east-1'."
+  }
 }
 
 variable "usage_api" {
-  description = "Serve the organization usage and costs endpoints (/v1/organization/usage/*, /v1/organization/costs) from the metrics cloudwatch_metrics publishes (adds the cloudwatch:GetMetricData and cloudwatch:ListMetrics permissions). Every query is billed by CloudWatch per metric read and is excluded from its free tier, and enabling this also stores the usage metrics under additional dimensions. Requires cloudwatch_metrics; the costs endpoint also requires cost_tracking. Default to false."
+  description = "Serve the organization usage and costs endpoints (/v1/organization/usage/*, /v1/organization/costs) from the metrics cloudwatch_metrics publishes (adds the cloudwatch:GetMetricData and cloudwatch:ListMetrics permissions). Every query is billed by CloudWatch per metric read and is excluded from its free tier, and enabling this also stores the usage metrics under additional dimensions. Requires cloudwatch_metrics; the costs endpoint also requires cost_tracking, and without it reports usage with no cost against it. Default to false."
   type        = bool
   default     = null
+
+  validation {
+    condition     = var.usage_api != true || var.cloudwatch_metrics == true
+    error_message = "Requires cloudwatch_metrics = true: the usage API answers from the metrics it publishes, so without it the task role carries cloudwatch:GetMetricData and cloudwatch:ListMetrics on every metric in the account for queries that can only ever come back empty."
+  }
 }
 
 variable "usage_api_admin_scopes" {
@@ -1008,18 +1106,33 @@ variable "usage_api_max_metrics" {
   description = "Maximum number of metric series one usage API query may read; a query matching more is refused rather than billed. Default to 500, which is also the CloudWatch per-request maximum."
   type        = number
   default     = null
+
+  validation {
+    condition     = var.usage_api_max_metrics == null || try(var.usage_api_max_metrics >= 1 && var.usage_api_max_metrics <= 500, false)
+    error_message = "Must be between 1 and 500: CloudWatch reads at most 500 metric series per GetMetricData request, so a higher ceiling is never reached."
+  }
 }
 
 variable "usage_api_max_range_days" {
   description = "Maximum span, in days, between start_time and end_time on a usage API query. Default to 92."
   type        = number
   default     = null
+
+  validation {
+    condition     = var.usage_api_max_range_days == null || try(var.usage_api_max_range_days >= 1 && var.usage_api_max_range_days <= 455, false)
+    error_message = "Must be between 1 and 455 days: CloudWatch keeps 15 months of metrics, so a longer span reads nothing before it."
+  }
 }
 
 variable "usage_api_cache_ttl" {
   description = "Seconds an answered usage API query is reused for, so a client polling faster than the bucket width is not billed for a query that cannot have changed. Set to 0 to disable. Default to 60."
   type        = number
   default     = null
+
+  validation {
+    condition     = var.usage_api_cache_ttl == null || try(var.usage_api_cache_ttl >= 0 && var.usage_api_cache_ttl <= 3600, false)
+    error_message = "Must be between 0 and 3600 seconds, 0 disabling the cache."
+  }
 }
 
 variable "cost_tracking" {
@@ -1151,16 +1264,26 @@ variable "model_cache_seconds" {
   description = "Age in seconds at which the cached Bedrock models list is refreshed. Once reached, the next request needing the list is answered from the cached one and the refresh runs in the background, so no request waits for it. Default to the application default (900, 15 minutes)."
   type        = number
   default     = null
+
+  validation {
+    condition     = var.model_cache_seconds == null || try(var.model_cache_seconds >= 1, false)
+    error_message = "Must be one second or more: the list has to be allowed an age before it can be refreshed at one."
+  }
 }
 
 variable "model_cache_max_stale_seconds" {
   description = "Maximum age in seconds the cached Bedrock models list may reach while its refresh keeps failing. Below it an expired list is served while the refresh runs; at or beyond it the next request waits for a successful refresh instead, so a deployment whose refreshes fail silently cannot serve an arbitrarily old list. Set to 0 to always wait for a refresh once the list has expired. Default to the application default (86400, 24 hours)."
   type        = number
   default     = null
+
+  validation {
+    condition     = var.model_cache_max_stale_seconds == null || try(var.model_cache_max_stale_seconds >= 0, false)
+    error_message = "Must be zero or greater, 0 making every request wait for a refresh once the list has expired."
+  }
 }
 
 variable "model_cache_shared" {
-  description = "If true, share one Bedrock models list between the deployment's servers through the DynamoDB table, which must be configured with aws_dynamodb_table or aws_dynamodb_table_create. One server refreshes the list and publishes it while the others read it, so a fleet performs one discovery pass per model_cache_seconds instead of one per server and a starting server is ready without a discovery pass of its own. Billed on the published list, roughly $0.60 to $2 per month at the default interval. Default to the application default (false)."
+  description = "If true, share one Bedrock models list between the deployment's servers through the shared DynamoDB table, which this module then creates for it. One server refreshes the list and publishes it while the others read it, so a fleet performs one discovery pass per model_cache_seconds instead of one per server and a starting server is ready without a discovery pass of its own. Billed on the published list and on the table it lives in, roughly $0.60 to $2 per month at the default interval. Default to the application default (false)."
   type        = bool
   default     = null
 }
@@ -1219,7 +1342,7 @@ variable "realtime_allow_session_override" {
 }
 
 variable "version_to_deploy" {
-  description = "Container image version tag from AWS Marketplace. Leave unset to automatically use the latest stable version. Only override for testing or rollback purposes. A '-arm64' or '-amd64' suffix is appended automatically based on var.cpu_architecture, so the value must not include an architecture suffix."
+  description = "Container image version tag from AWS Marketplace. Defaults to the server version this module release was built and tested against, which is what makes a given module version reproducible; there is no 'latest' resolution. Raise it to take a newer server without changing module version, or lower it to roll back. A '-arm64' or '-amd64' suffix is appended automatically based on var.cpu_architecture, so the value must not include an architecture suffix."
   type        = string
   default     = "1.16.1"
 }
@@ -1241,9 +1364,9 @@ variable "vpc_endpoints_allowed" {
 }
 
 variable "nat_gateways_allowed" {
-  description = "If true, NAT gateways are used to give internet access to the application. If Disabled and internet access is required, application subnets will be public. Disable only if cost is privileged over security. "
+  description = "If true, NAT gateways give the application its internet access. One NAT gateway is created per availability zone and each is billed hourly whether or not traffic flows, which makes this the module's largest fixed monthly cost; set availability_zones_count to bound it. If false and internet access is required, the application subnets are public instead: no hourly charge, and the tasks are addressed directly. Default to true, except with realtime_webrtc_media_enabled, which needs the task publicly addressed and turns it off for you."
   type        = bool
-  default     = true
+  default     = null
 }
 
 variable "availability_zones_count" {
@@ -1341,7 +1464,7 @@ variable "cpu" {
 }
 
 variable "memory" {
-  description = "ECS task memory (MiB). Valid values depends on the var.container_cpu value (x1024), see the ECS documentation for more information. Default of 512 MiB is suitable for common use cases (text generation, embeddings). Increase for intensive workloads (multimodal requests, large LLM models)."
+  description = "ECS task memory (MiB). Valid values depend on the var.cpu value, see the ECS documentation. The default of 512 MiB covers text generation and embeddings, where the task holds little more than the request in flight. It is not enough for the paths that hold bytes in memory: audio and video through the ffmpeg pipeline, inline input files up to max_input_file_size, and max_concurrent_input_downloads of them fetched at once. Raise it to 1024 or beyond before using those, or the task is OOM-killed under load rather than answering slowly."
   type        = number
   default     = 512
 }
@@ -1575,13 +1698,13 @@ variable "container_insight" {
 }
 
 variable "alarms_enabled" {
-  description = "Enable CloudWatch alarms. This should be set to true if sns_topic_arn is provided."
+  description = "Enable CloudWatch alarms. Default to whether sns_topic_arn is set: an alarm with no topic to notify is one nobody sees, and a topic configured for alarms that do not exist is a setting that does nothing. Set explicitly to override either way."
   type        = bool
-  default     = false
+  default     = null
 }
 
 variable "sns_topic_arn" {
-  description = "SNS topic ARN for CloudWatch alarms. If specified, CloudWatch alarms will be created for high memory usage and unhealthy containers."
+  description = "SNS topic ARN notified by the CloudWatch alarms. Setting it is what turns alarms on (see alarms_enabled): the ECS service alarms of the underlying module -- high memory, unhealthy containers, CPU anomaly, autoscaling at its ceiling -- plus one alarm created here on ERROR and CRITICAL log lines. Default to none."
   type        = string
   default     = null
 }
@@ -1589,7 +1712,7 @@ variable "sns_topic_arn" {
 # Other
 
 variable "deletion_protection" {
-  description = "If true, enable deletion protection on eligible resources."
+  description = "If true, enable deletion protection on eligible resources. One resource ignores it: the shared DynamoDB table derives its own from what it holds. With tenants declared it holds the tenant secret hashes and salts, which exist nowhere else, so it is always protected regardless of this setting and destroying the deployment takes two applies: first one with tenants emptied and model_cache_shared = true, which deletes the tenant records and clears the protection while keeping the table, then the destroy itself. Emptying tenants on its own would drop the table in that same apply, which AWS refuses while the protection is still on. Holding only the shared models list (model_cache_shared) it is a pure cache the next discovery sweep rebuilds, so it is never protected and destroys cleanly."
   type        = bool
   default     = false
 }
@@ -1602,11 +1725,21 @@ variable "realtime_webrtc_stun_server" {
   description = "STUN server the server queries to discover the public address it advertises to WebRTC callers, as a STUN URI. Required behind the 1:1 NAT of a public ECS task; any public STUN server works and learns nothing but the deployment's public address."
   type        = string
   default     = "stun:stun.l.google.com:19302"
+
+  validation {
+    condition     = can(regex("^stuns?:", var.realtime_webrtc_stun_server))
+    error_message = "Must be a STUN URI, 'stun:<host>:<port>' or 'stuns:<host>:<port>'."
+  }
 }
 variable "realtime_webrtc_turn_server" {
   description = "Operator-run TURN relay advertised to WebRTC callers whose networks block UDP, as a TURN URI (e.g. 'turn:turn.example.com:3478?transport=udp'). AWS offers no managed TURN; requires realtime_webrtc_turn_username and realtime_webrtc_turn_password."
   type        = string
   default     = null
+
+  validation {
+    condition     = var.realtime_webrtc_turn_server == null || can(regex("^turns?:", coalesce(var.realtime_webrtc_turn_server, "turn:")))
+    error_message = "Must be a TURN URI, 'turn:<host>:<port>' or 'turns:<host>:<port>', optionally with '?transport=udp' or '?transport=tcp'."
+  }
 }
 variable "realtime_webrtc_turn_username" {
   description = "Long-term credential username of realtime_webrtc_turn_server."

@@ -46,6 +46,10 @@ resource "random_string" "tenant_key_id" {
 resource "aws_dynamodb_table_item" "tenant" {
   for_each = var.tenants
 
+  # The table name is composed rather than read from the resource (see dynamodb.tf), so the
+  # ordering the reference used to carry has to be declared.
+  depends_on = [aws_dynamodb_table.main]
+
   region     = local.dynamodb_region
   table_name = local.dynamodb_table_name
   hash_key   = "pk"
@@ -79,10 +83,6 @@ resource "aws_dynamodb_table_item" "tenant" {
   ))
 
   lifecycle {
-    precondition {
-      condition     = local.dynamodb_table_name != null
-      error_message = "tenants requires the shared DynamoDB table holding the tenant records: set aws_dynamodb_table or aws_dynamodb_table_create."
-    }
     precondition {
       # Mirrors the server's own startup refusal, at plan time: a guardrail of this
       # account cannot be evaluated by a tenant's principal, so tenant-signed

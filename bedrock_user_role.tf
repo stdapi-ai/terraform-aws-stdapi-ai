@@ -86,7 +86,7 @@ resource "aws_iam_role" "end_user" {
   name               = local.end_user_role_name
   description        = "End user of the stdapi.ai gateway, one role session per end user"
   assume_role_policy = data.aws_iam_policy_document.end_user_assume_role[0].json
-  tags               = local.apn_tags
+  tags               = local.tags
 }
 
 data "aws_iam_policy_document" "end_user" {

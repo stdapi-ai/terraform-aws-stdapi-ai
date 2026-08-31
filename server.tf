@@ -10,7 +10,7 @@ module "server" {
   # first that keeps every prefix-derived name within its AWS limit, the rule
   # bedrock_user_role.tf reconstructs the task role's name from.
   version                           = ">= 1.4.4, < 2.0.0"
-  tags                              = local.apn_tags
+  tags                              = local.tags
   kms_key_id                        = module.kms_key.id
   kms_policy_dependency             = module.kms_key.policy_dependency
   subnets_ids                       = module.vpc.subnets_ids
@@ -22,7 +22,7 @@ module "server" {
   cpu_architecture                  = var.cpu_architecture
   cpu                               = var.cpu
   memory                            = var.memory
-  assign_public_ip                  = local.internet_access_required && !var.nat_gateways_allowed
+  assign_public_ip                  = local.internet_access_required && !local.nat_gateways_allowed
   deletion_protection               = var.deletion_protection
 
   # Service Discovery
@@ -30,8 +30,8 @@ module "server" {
   service_discovery_dns_name         = var.service_discovery_dns_name
 
   # Auto-Scaling
-  autoscaling_min_capacity                   = var.autoscaling_min_capacity
-  autoscaling_max_capacity                   = var.autoscaling_max_capacity
+  autoscaling_min_capacity                   = local.autoscaling_min_capacity
+  autoscaling_max_capacity                   = local.autoscaling_max_capacity
   autoscaling_cpu_target_percent             = var.autoscaling_cpu_target_percent
   autoscaling_memory_target_percent          = var.autoscaling_memory_target_percent
   autoscaling_alb_target_requests_per_target = var.autoscaling_alb_target_requests_per_target
@@ -44,7 +44,7 @@ module "server" {
   autoscaling_spot_on_demand_min_capacity    = var.autoscaling_spot_on_demand_min_capacity
 
   # Monitoring
-  alarms_enabled = var.alarms_enabled
+  alarms_enabled = local.alarms_enabled
   sns_topic_arn  = var.sns_topic_arn
 
   container_definitions = {
@@ -121,7 +121,6 @@ module "server" {
           DEFAULT_MODEL_SERVICE_TIERS              = var.default_model_service_tiers
           DEFAULT_TTS_MODEL                        = var.default_tts_model
           DEFAULT_TTS_LANGUAGE                     = var.default_tts_language
-          TOKENS_ESTIMATION_DEFAULT_ENCODING       = var.tokens_estimation_default_encoding
           CLOUDWATCH_METRICS_NAMESPACE             = var.cloudwatch_metrics_namespace
           ANTHROPIC_BETA_ALLOWLIST                 = var.anthropic_beta_allowlist
           MCP_INCLUDE_TOOLS                        = var.mcp_include_tools
@@ -158,11 +157,10 @@ module "server" {
           LOG_REQUEST_PARAMS                                     = var.log_request_params
           LOG_CLIENT_IP                                          = var.log_client_ip
           STRICT_INPUT_VALIDATION                                = var.strict_input_validation
-          TOKENS_ESTIMATION                                      = var.tokens_estimation
           ENABLE_DOCS                                            = var.enable_docs
           ENABLE_REDOC                                           = var.enable_redoc
           ENABLE_OPENAPI_JSON                                    = var.enable_openapi_json
-          ENABLE_PROXY_HEADERS                                   = (var.enable_proxy_headers != null || (var.alb_enabled && var.log_client_ip == true)) ? true : null
+          ENABLE_PROXY_HEADERS                                   = local.enable_proxy_headers ? true : null
           ENABLE_GZIP                                            = var.enable_gzip
           SSRF_PROTECTION_BLOCK_PRIVATE_NETWORKS                 = var.ssrf_protection_block_private_networks
           MODEL_CACHE_SECONDS                                    = var.model_cache_seconds
@@ -287,7 +285,7 @@ locals {
 resource "aws_iam_policy" "server" {
   name   = "${local.name}-policy"
   policy = data.aws_iam_policy_document.server.json
-  tags   = local.apn_tags
+  tags   = local.tags
 
   # Caught at plan time, where the statement that overflowed is still in front of
   # you. Without it, IAM answers CreatePolicy with a bare "LimitExceeded: Cannot
@@ -303,7 +301,7 @@ resource "aws_iam_policy" "server" {
 resource "aws_iam_policy" "server_services" {
   name   = "${local.name}-services-policy"
   policy = data.aws_iam_policy_document.server_services.json
-  tags   = local.apn_tags
+  tags   = local.tags
 
   lifecycle {
     precondition {

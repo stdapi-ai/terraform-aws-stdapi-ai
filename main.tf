@@ -22,6 +22,30 @@ locals {
   # AWS PRM attribution tags
   apn_product_code = "72gxmztpjz2hm5qnkkg0iiazo"
   apn_tags         = { "aws-apn-id" = "pc:${local.apn_product_code}" }
+
+  # What every resource this module creates is tagged with. The attribution tag is merged last, so
+  # a var.tags entry of the same key cannot displace it: it is what AWS reads to attribute the
+  # deployment to the Marketplace product, and it is not the operator's to change.
+  tags = merge(var.tags, local.apn_tags)
+}
+
+# var.name_prefix is bounded against the shortest region name AWS publishes, because a variable
+# validation cannot read the region. Here it can, so the two names that bind report the ceiling this
+# deployment actually has. A warning rather than an error: the bound moves with the region, and an
+# operator who reads it can shorten the prefix before the apply stops halfway through creating the
+# deployment, which is where the provider's own length checks would otherwise fire.
+check "name_prefix_fits_the_deployment_region" {
+  # Counted rather than measured: local.name carries random_id.main.hex, unknown on a first plan,
+  # which would leave the assertion itself unknown. The 10 characters it adds are constant.
+  assert {
+    condition     = length(var.name_prefix) <= 40 - 2 * length(data.aws_region.current.region)
+    error_message = "name_prefix is ${length(var.name_prefix)} characters, over the ${40 - 2 * length(data.aws_region.current.region)} region ${data.aws_region.current.region} leaves: the VPC flow log IAM role name repeats the region and caps at IAM's 64 characters."
+  }
+
+  assert {
+    condition     = !var.alb_enabled || length(var.name_prefix) <= 22 - length(data.aws_region.current.region)
+    error_message = "name_prefix is ${length(var.name_prefix)} characters, over the ${22 - length(data.aws_region.current.region)} region ${data.aws_region.current.region} leaves: the load balancer and its target group cap at 32 characters."
+  }
 }
 
 # Application ID used in names
@@ -113,7 +137,7 @@ module "kms_key" {
 
   id          = var.kms_key_id
   name_prefix = local.name
-  tags        = local.apn_tags
+  tags        = local.tags
   policy_documents_json = concat(
     [
       data.aws_iam_policy_document.log_kms_policy.json,

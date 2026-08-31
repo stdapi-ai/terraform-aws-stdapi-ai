@@ -2,6 +2,17 @@
 Application Load Balancer
 */
 
+# Proxy headers trusted from a peer this module cannot name: only the ALB's own subnets can be
+# derived, so enabling them anywhere else leaves the server on its default of trusting every
+# peer. A warning, not an error, because the combination applies today and the operator may have
+# a proxy in front that this module knows nothing about.
+check "proxy_headers_name_their_peer" {
+  assert {
+    condition     = !local.enable_proxy_headers || local.proxy_trusted_hosts_declared != null
+    error_message = "enable_proxy_headers is on without an ALB to derive the trusted peer from, so the server falls back to trusting X-Forwarded-* from every peer that can reach it. Set proxy_trusted_hosts to the CIDR blocks of your proxy."
+  }
+}
+
 locals {
   # Use public subnets if ALB is public, otherwise use app subnets
   alb_subnets = var.alb_enabled && var.alb_public ? module.vpc.public_subnets_ids : module.vpc.subnets_ids
@@ -14,9 +25,20 @@ locals {
     module.vpc.subnets_cidr_blocks, module.vpc.subnets_ipv6_cidr_blocks
   )
 
-  # Trusted peers, before the address families the server actually sees are covered.
+  # Whether the server trusts X-Forwarded-* at all. An explicit setting wins, including an
+  # explicit false: only an unset value is auto-enabled, and only for an ALB whose client IP the
+  # deployment asked to log.
+  enable_proxy_headers = (
+    var.enable_proxy_headers != null ? var.enable_proxy_headers :
+    (var.alb_enabled && var.log_client_ip == true)
+  )
+
+  # Trusted peers, before the address families the server actually sees are covered. Tied to the
+  # resolved value above rather than to log_client_ip: trusting the headers without naming a peer
+  # leaves the server on its own default of "*", where anything that can reach the task can forge
+  # X-Forwarded-For and choose the client IP the deployment records.
   proxy_trusted_hosts_declared = var.proxy_trusted_hosts != null ? var.proxy_trusted_hosts : (
-    (var.alb_enabled && var.log_client_ip == true) ? local.alb_subnets_cidr_blocks : null
+    (local.enable_proxy_headers && var.alb_enabled) ? local.alb_subnets_cidr_blocks : null
   )
 
   # With IPv6 on, the server binds a dual-stack socket (GRANIAN_HOST below), and the
@@ -34,6 +56,18 @@ locals {
     ]))
   )
 
+  # Every way a client can be made to prove who it is: an API key from any of its sources, an
+  # Amazon Cognito user pool, or a tenant API key. Matches what the server counts as an enabled
+  # authentication method at startup; with none of them it accepts every request.
+  authentication_configured = (
+    var.api_key != null ||
+    var.api_key_create ||
+    var.api_key_ssm_parameter != null ||
+    var.api_key_secretsmanager_secret != null ||
+    var.aws_cognito_user_pool_id != null ||
+    length(var.tenants) > 0
+  )
+
   # Shared logs bucket needed for ALB access logs and/or the main S3 bucket's server access logs.
   # Regional S3 buckets (storage_regional.tf) can't log here: S3 access log destinations must be in
   # the same Region as the source bucket, and this bucket isn't Region-pinned (it lives in the
@@ -48,7 +82,7 @@ resource "aws_security_group" "alb" {
   description = "Security group for ${local.name} ALB"
   vpc_id      = module.vpc.vpc_id
 
-  tags = merge(local.apn_tags, { Name = "${local.name}-alb" })
+  tags = merge(local.tags, { Name = "${local.name}-alb" })
 }
 
 # Allow inbound HTTP (IPv4)
@@ -60,7 +94,7 @@ resource "aws_vpc_security_group_ingress_rule" "alb_http_ipv4" {
   to_port           = 80
   ip_protocol       = "tcp"
   cidr_ipv4         = each.key
-  tags              = local.apn_tags
+  tags              = local.tags
 }
 
 # Allow inbound HTTP (IPv6)
@@ -72,7 +106,7 @@ resource "aws_vpc_security_group_ingress_rule" "alb_http_ipv6" {
   to_port           = 80
   ip_protocol       = "tcp"
   cidr_ipv6         = each.key
-  tags              = local.apn_tags
+  tags              = local.tags
 }
 
 # Allow inbound HTTPS (IPv4, only if certificate is provided)
@@ -84,7 +118,7 @@ resource "aws_vpc_security_group_ingress_rule" "alb_https_ipv4" {
   to_port           = 443
   ip_protocol       = "tcp"
   cidr_ipv4         = each.key
-  tags              = local.apn_tags
+  tags              = local.tags
 }
 
 # Allow inbound HTTPS (IPv6, only if certificate is provided)
@@ -96,7 +130,7 @@ resource "aws_vpc_security_group_ingress_rule" "alb_https_ipv6" {
   to_port           = 443
   ip_protocol       = "tcp"
   cidr_ipv6         = each.key
-  tags              = local.apn_tags
+  tags              = local.tags
 }
 
 # Allow outbound to ECS service
@@ -108,7 +142,7 @@ resource "aws_vpc_security_group_egress_rule" "alb_to_ecs" {
   to_port                      = local.port
   ip_protocol                  = "tcp"
   referenced_security_group_id = module.server.security_group_id
-  tags                         = local.apn_tags
+  tags                         = local.tags
 }
 
 # Allow inbound from ALB to ECS service
@@ -120,7 +154,7 @@ resource "aws_vpc_security_group_ingress_rule" "ecs_from_alb" {
   to_port                      = local.port
   ip_protocol                  = "tcp"
   referenced_security_group_id = aws_security_group.alb[0].id
-  tags                         = local.apn_tags
+  tags                         = local.tags
 }
 
 # Application Load Balancer
@@ -146,7 +180,17 @@ resource "aws_lb" "main" {
     }
   }
 
-  tags = merge(local.apn_tags, { Name = local.name })
+  tags = merge(local.tags, { Name = local.name })
+
+  lifecycle {
+    # An internet-facing load balancer in front of a server that authenticates nobody is an open
+    # LLM gateway billed to this account, and nothing else in the plan says so: the server only
+    # records a startup warning, and answers every request meanwhile.
+    precondition {
+      condition     = !var.alb_public || local.authentication_configured
+      error_message = "alb_public = true requires an authentication method: set api_key_create = true, or one of api_key / api_key_ssm_parameter / api_key_secretsmanager_secret, or aws_cognito_user_pool_id, or declare tenants. Without one the server accepts every request that reaches it, and this load balancer puts it on the internet."
+    }
+  }
 }
 
 # Target Group
@@ -162,7 +206,7 @@ resource "aws_lb_target_group" "main" {
   health_check {
     path = "/health"
   }
-  tags = merge(local.apn_tags, { Name = local.name })
+  tags = merge(local.tags, { Name = local.name })
 }
 
 # HTTP Listener
@@ -171,7 +215,7 @@ resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.main[0].arn
   port              = 80
   protocol          = "HTTP"
-  tags              = local.apn_tags
+  tags              = local.tags
 
   # If HTTPS is enabled, redirect HTTP to HTTPS, otherwise forward to target group
   dynamic "default_action" {
@@ -203,7 +247,7 @@ resource "aws_lb_listener" "https" {
   protocol          = "HTTPS"
   ssl_policy        = var.alb_ssl_policy
   certificate_arn   = local.certificate_arn
-  tags              = local.apn_tags
+  tags              = local.tags
 
   default_action {
     type             = "forward"
@@ -218,7 +262,7 @@ resource "aws_s3_bucket" "logs" {
   count         = local.logs_bucket_enabled ? 1 : 0
   bucket        = "${local.name}-logs"
   force_destroy = !var.deletion_protection
-  tags          = merge(local.apn_tags, { Name = "${local.name}-logs" })
+  tags          = merge(local.tags, { Name = "${local.name}-logs" })
 }
 
 resource "aws_s3_bucket_public_access_block" "logs" {

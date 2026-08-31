@@ -33,7 +33,7 @@ module "regional_kms" {
 
   name_prefix = local.name
   region      = each.key
-  tags        = local.apn_tags
+  tags        = local.tags
 }
 
 resource "aws_s3_bucket" "regional" {
@@ -41,7 +41,7 @@ resource "aws_s3_bucket" "regional" {
   region        = each.key
   bucket        = local.regional_bucket_names[each.key]
   force_destroy = !var.deletion_protection
-  tags          = merge(local.apn_tags, { Name = local.regional_bucket_names[each.key] })
+  tags          = merge(local.tags, { Name = local.regional_bucket_names[each.key] })
 }
 
 resource "aws_s3_bucket_public_access_block" "regional" {
@@ -155,7 +155,7 @@ resource "aws_s3_bucket" "regional_logs" {
   region        = each.key
   bucket        = "${local.regional_bucket_names[each.key]}-logs"
   force_destroy = !var.deletion_protection
-  tags          = merge(local.apn_tags, { Name = "${local.regional_bucket_names[each.key]}-logs" })
+  tags          = merge(local.tags, { Name = "${local.regional_bucket_names[each.key]}-logs" })
 }
 
 resource "aws_s3_bucket_public_access_block" "regional_logs" {

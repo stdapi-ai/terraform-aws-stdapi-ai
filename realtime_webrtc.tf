@@ -1,4 +1,17 @@
 locals {
+  # The mode dictates all three of these, and the module knows it, so it sets them rather than
+  # failing the plan and asking the operator to type back what it already worked out. An explicit
+  # value still wins, and the preconditions below reject one that contradicts the mode.
+  nat_gateways_allowed = var.nat_gateways_allowed != null ? var.nat_gateways_allowed : !var.realtime_webrtc_media_enabled
+
+  autoscaling_min_capacity = var.autoscaling_min_capacity != null ? var.autoscaling_min_capacity : (
+    var.realtime_webrtc_media_enabled ? 1 : null
+  )
+
+  autoscaling_max_capacity = var.autoscaling_max_capacity != null ? var.autoscaling_max_capacity : (
+    var.realtime_webrtc_media_enabled ? 1 : null
+  )
+
   # The two hosts the task itself reaches out to, read from the URIs it is configured with: it
   # queries the STUN server for the public address it advertises, and relays through the TURN
   # server when one is set. The port is optional in both URI forms and its default differs between
@@ -65,13 +78,16 @@ resource "terraform_data" "realtime_webrtc_media_validation" {
   count = var.realtime_webrtc_media_enabled ? 1 : 0
 
   lifecycle {
+    # The three settings the mode needs are derived from the mode itself (see the locals below).
+    # What remains is a conflict: the operator named a value the mode cannot work with, and
+    # silently overriding it would be worse than saying so.
     precondition {
-      condition     = !var.nat_gateways_allowed
-      error_message = "realtime_webrtc_media_enabled requires nat_gateways_allowed = false: behind a NAT gateway the task has no public address, so the SDP answer advertises candidates no caller can reach and every call connects silently dead."
+      condition     = var.nat_gateways_allowed != true
+      error_message = "realtime_webrtc_media_enabled cannot be combined with nat_gateways_allowed = true: behind a NAT gateway the task has no public address, so the SDP answer advertises candidates no caller can reach and every call connects silently dead. Leave nat_gateways_allowed unset and the mode turns it off for you."
     }
     precondition {
-      condition     = var.autoscaling_min_capacity == 1 && var.autoscaling_max_capacity == 1
-      error_message = "realtime_webrtc_media_enabled requires autoscaling_min_capacity = 1 and autoscaling_max_capacity = 1: a call lives in the memory of the task that answered its SDP offer, and hangup, the sideband WebSocket and the media itself cannot reach any other task."
+      condition     = (var.autoscaling_min_capacity == null || var.autoscaling_min_capacity == 1) && (var.autoscaling_max_capacity == null || var.autoscaling_max_capacity == 1)
+      error_message = "realtime_webrtc_media_enabled cannot be combined with an autoscaling capacity other than 1: a call lives in the memory of the task that answered its SDP offer, and hangup, the sideband WebSocket and the media itself cannot reach any other task. Leave autoscaling_min_capacity and autoscaling_max_capacity unset and the mode pins both to 1 for you."
     }
     precondition {
       condition     = (var.realtime_webrtc_turn_server == null) == (var.realtime_webrtc_turn_username == null) && (var.realtime_webrtc_turn_server == null) == (var.realtime_webrtc_turn_password == null)
@@ -94,7 +110,7 @@ resource "aws_vpc_security_group_ingress_rule" "realtime_webrtc_media_ipv4" {
   from_port         = var.realtime_webrtc_udp_port_range.from
   to_port           = var.realtime_webrtc_udp_port_range.to
   cidr_ipv4         = each.value
-  tags              = local.apn_tags
+  tags              = local.tags
 
   depends_on = [terraform_data.realtime_webrtc_media_validation]
 }
@@ -107,7 +123,7 @@ resource "aws_vpc_security_group_ingress_rule" "realtime_webrtc_media_ipv6" {
   from_port         = var.realtime_webrtc_udp_port_range.from
   to_port           = var.realtime_webrtc_udp_port_range.to
   cidr_ipv6         = each.value
-  tags              = local.apn_tags
+  tags              = local.tags
 
   depends_on = [terraform_data.realtime_webrtc_media_validation]
 }

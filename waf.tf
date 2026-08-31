@@ -167,7 +167,7 @@ resource "aws_wafv2_web_acl" "main" {
     sampled_requests_enabled   = true
   }
 
-  tags = merge(local.apn_tags, { Name = local.name })
+  tags = merge(local.tags, { Name = local.name })
 }
 
 # Associate WAF with ALB
@@ -184,7 +184,7 @@ resource "aws_cloudwatch_log_group" "waf" {
   retention_in_days = var.cloudwatch_logs_retention_in_days
   kms_key_id        = module.kms_key.arn
   depends_on        = [module.kms_key.policy_dependency]
-  tags              = local.apn_tags
+  tags              = local.tags
 }
 
 # WAF Logging Configuration

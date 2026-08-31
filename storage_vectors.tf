@@ -47,7 +47,7 @@ module "vectors_kms" {
 
   name_prefix           = "${local.name_prefix}-vectors"
   region                = local.s3_vectors_region
-  tags                  = local.apn_tags
+  tags                  = local.tags
   policy_documents_json = [data.aws_iam_policy_document.vectors_kms_policy[0].json]
 }
 
@@ -91,7 +91,7 @@ resource "aws_s3vectors_vector_bucket" "main" {
   region             = local.s3_vectors_region
   vector_bucket_name = local.s3_vectors_bucket_created_name
   force_destroy      = !var.deletion_protection
-  tags               = merge(local.apn_tags, { Name = local.s3_vectors_bucket_created_name })
+  tags               = merge(local.tags, { Name = local.s3_vectors_bucket_created_name })
 
   encryption_configuration {
     sse_type    = "aws:kms"

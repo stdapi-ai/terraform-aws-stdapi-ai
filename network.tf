@@ -66,6 +66,9 @@ locals {
     local.translate_in_current_region ? ["translate"] : [],
     local.sqs_in_current_region ? ["sqs"] : [],
     local.s3vectors_in_current_region ? ["s3vectors"] : [],
+    # Gateway endpoint like s3: free, so it is added on the feature alone rather than weighed
+    # against a monthly cost. The table always lives in the deployment region.
+    local.create_dynamodb_table ? ["dynamodb"] : [],
   )
 
   # Internet access required. WebRTC media mode counts too: callers and the
@@ -86,9 +89,9 @@ module "vpc" {
   version = "~> 1.6"
 
   name_prefix                                = local.name
-  tags                                       = local.apn_tags
+  tags                                       = local.tags
   internet_access_allowed                    = local.internet_access_required
-  nat_gateways_allowed                       = var.nat_gateways_allowed
+  nat_gateways_allowed                       = local.nat_gateways_allowed
   vpc_endpoints_allowed                      = var.vpc_endpoints_allowed
   compliance_vpc_endpoints_enabled           = var.compliance_vpc_endpoints_enabled
   guardduty_vpc_endpoint_enabled             = var.guardduty_vpc_endpoint_enabled

@@ -1,4 +1,26 @@
 /*
+Vector Stores API settings that only fail once the container is running.
+
+Fails the plan on combinations the server refuses at startup, so a deployment that cannot boot
+is caught before it is applied. Same shape as realtime_webrtc.tf: a validation surface holding
+no infrastructure, present only when one of the settings it checks is set.
+*/
+resource "terraform_data" "vector_store_validation" {
+  count = local.vector_stores_enabled || var.aws_sqs_vector_store_queue_url != null ? 1 : 0
+
+  lifecycle {
+    precondition {
+      condition     = !local.vector_stores_enabled || var.aws_s3_bucket != null || local.create_s3_bucket
+      error_message = "The Vector Stores API requires the application's own S3 bucket, which holds the vector store records: set aws_s3_bucket to an existing bucket, or leave aws_s3_bucket_create at its default of true."
+    }
+    precondition {
+      condition     = var.aws_sqs_vector_store_queue_url == null || local.vector_stores_enabled
+      error_message = "aws_sqs_vector_store_queue_url requires the Vector Stores API, which nothing here enables: without a vector bucket no file is indexed, so the queue would carry nothing. Set aws_s3_vectors_bucket, or leave aws_s3_vectors_bucket_create at true."
+    }
+  }
+}
+
+/*
 Durable vector store indexing on Amazon SQS
 
 The queue makes an indexing job outlive the task that accepted it: the work is recorded on the
@@ -60,7 +82,7 @@ resource "aws_sqs_queue" "vector_store_dead_letter" {
   kms_master_key_id = module.kms_key.id
   # The maximum Amazon SQS allows: a message here is evidence to look at, not work to run.
   message_retention_seconds = 1209600
-  tags                      = merge(local.apn_tags, { Name = "${local.name}-vector-store-dlq" })
+  tags                      = merge(local.tags, { Name = "${local.name}-vector-store-dlq" })
 
   depends_on = [module.kms_key.policy_dependency]
 }
@@ -94,7 +116,7 @@ resource "aws_sqs_queue" "vector_store" {
     # settling it as failed; 3 is also what it falls back to when a queue carries no policy.
     maxReceiveCount = 3
   })
-  tags = merge(local.apn_tags, { Name = "${local.name}-vector-store" })
+  tags = merge(local.tags, { Name = "${local.name}-vector-store" })
 
   depends_on = [module.kms_key.policy_dependency]
 }
