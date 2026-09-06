@@ -80,6 +80,21 @@ locals {
   vpc_created = length(var.subnet_ids) == 0
 }
 
+# Fails the plan when compliance/GuardDuty interface endpoints are requested but the
+# application subnets end up public, leaving no private subnet to place them in: a
+# validation surface, holding no infrastructure. realtime_webrtc_media_enabled is
+# excluded here since it already fails this same combination with a mode-specific message.
+resource "terraform_data" "enforced_vpc_endpoints_validation" {
+  count = (var.compliance_vpc_endpoints_enabled || var.guardduty_vpc_endpoint_enabled) && !var.realtime_webrtc_media_enabled ? 1 : 0
+
+  lifecycle {
+    precondition {
+      condition     = !(local.vpc_created && local.internet_access_required && !local.nat_gateways_allowed)
+      error_message = "compliance_vpc_endpoints_enabled/guardduty_vpc_endpoint_enabled cannot be combined with nat_gateways_allowed = false while internet access is required (the default, driven by aws_bedrock_marketplace_auto_subscribe or cross-region service usage): the application subnets become public, leaving no private subnet for the endpoint's network interface, so the endpoint would silently not be created. Set nat_gateways_allowed = true (or leave it unset), or turn off compliance_vpc_endpoints_enabled/guardduty_vpc_endpoint_enabled."
+    }
+  }
+}
+
 module "vpc" {
   source = "JGoutin/vpc/aws"
   # 1.6 is the first release whose ipv6_enabled answers for provided subnets that
