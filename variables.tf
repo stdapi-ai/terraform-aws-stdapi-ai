@@ -183,7 +183,7 @@ variable "aws_bedrock_mantle_regions" {
 }
 
 variable "aws_bedrock_mantle_preferred_models" {
-  description = "Model IDs (or ID prefixes) served by Amazon Bedrock Mantle even when also available on the classic bedrock-runtime endpoint. Cannot be combined with Bedrock Guardrails, which Mantle does not apply. Left unset, the server's own default applies: the OpenAI GPT-5.6 family, which serves the OpenAI server tools only on Mantle and is therefore billed at the In-Region rate, 1.10x the cross-region one. Set to an empty list to route every model through bedrock-runtime instead."
+  description = "Model IDs (or ID prefixes) served by Amazon Bedrock Mantle even when also available on the classic bedrock-runtime endpoint. Cannot be combined with Bedrock Guardrails, which Mantle does not apply. Left unset, the server's own default applies: the OpenAI GPT-5.6 family, which serves the OpenAI server tools only on Mantle and is therefore billed at the In-Region rate, 1.10x the cross-region one. Amazon Bedrock token counting does not apply to Mantle-served models either. An explicit list replaces that default entirely rather than adding to it: repeat 'openai.gpt-5.6' to keep it. Set to an empty list to route every model through bedrock-runtime instead."
   type        = list(string)
   default     = null
 }
@@ -790,7 +790,25 @@ variable "tenant_key_cache_seconds" {
 }
 
 variable "tenants" {
-  description = "Per-tenant API keys, one entry per tenant keyed by the tenant's name. Terraform owns each tenant's record in the shared DynamoDB table — identity, model allow/deny lists, endpoint restrictions (glob patterns against route path templates such as '/v1/chat/completions'), the disabled flag, and optionally 'aws_role_arn', an IAM role of the tenant's own AWS account its model invocations then run under (its own Amazon Bedrock quota and bill) — in the shared DynamoDB table this module creates for the first tenant declared. Declaring a role enables tenant AWS credentials on the server, grants the task role 'sts:AssumeRole' on exactly the declared roles, and cannot be combined with Amazon Bedrock Guardrails; the tenant must condition its role's trust policy on the ExternalId the server mints (read it from the tenant's 'secret#<key id>' record). The key secret never enters Terraform state: the server mints it and delivers it once through the SSM parameter named in the tenant_keys output. That parameter is a SecureString encrypted with this deployment's own KMS key, so reading the key also takes kms:Decrypt on that key and not merely ssm:GetParameter on the path: retrieve it and delete it as soon as it appears. An absent list restricts nothing; an empty list allows nothing; deny wins over allow. Default to no tenants, which leaves tenant API keys disabled."
+  description = <<-EOT
+    Per-tenant API keys, one entry per tenant keyed by the tenant's name. Terraform owns each tenant's record — identity, scopes, the disabled flag, the optional role — in the shared DynamoDB table this module creates for the first tenant declared, and never owns the key secret itself. Default to no tenants, which leaves tenant API keys disabled.
+
+    Fields, all optional: "models_allow" and "models_deny" scope the models the tenant may name; "endpoints_allow" and "endpoints_deny" scope the routes, as glob patterns against route path templates such as '/v1/chat/completions'; "disabled" suspends the tenant's keys without deleting the record; "aws_role_arn" is an IAM role of the tenant's own AWS account its model invocations then run under, on the tenant's own Amazon Bedrock quota and bill. An absent list restricts nothing; an empty list allows nothing; deny wins over allow.
+
+    Example: {
+      "acme" = {
+        models_allow   = ["anthropic.claude-*"]
+        endpoints_deny = ["/v1/images/*"]
+      }
+      "globex" = {
+        aws_role_arn = "arn:aws:iam::123456789012:role/globex-stdapi"
+      }
+    }
+
+    The key secret never enters Terraform state: the server mints it and delivers it once through the SSM parameter named in the tenant_keys output. That parameter is a SecureString encrypted with this deployment's own KMS key, so reading the key also takes kms:Decrypt on that key and not merely ssm:GetParameter on the path: retrieve it and delete it as soon as it appears.
+
+    Declaring 'aws_role_arn' enables tenant AWS credentials on the server, grants the task role 'sts:AssumeRole' on exactly the declared roles, and cannot be combined with Amazon Bedrock Guardrails; the tenant must condition its role's trust policy on the ExternalId the server mints, read from the tenant's 'secret#<key id>' record.
+  EOT
   type = map(object({
     models_allow    = optional(list(string))
     models_deny     = optional(list(string))
@@ -849,7 +867,7 @@ variable "timezone" {
 }
 
 variable "openai_routes_prefix" {
-  description = "OpenAI API compatible routes prefix."
+  description = "OpenAI API compatible routes prefix. Default to the root, where OpenAI clients expect '/v1/*'."
   type        = string
   default     = null
 }
