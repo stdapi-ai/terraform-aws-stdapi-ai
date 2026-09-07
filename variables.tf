@@ -1585,25 +1585,30 @@ variable "autoscaling_min_capacity" {
 }
 
 variable "autoscaling_max_capacity" {
-  description = "Maximum number of ECS tasks for auto-scaling. If null, uses AWS default."
+  description = "Maximum number of ECS tasks for auto-scaling. If null, defaults to five times the minimum capacity."
   type        = number
   default     = null
 }
 
 variable "autoscaling_cpu_target_percent" {
-  description = "Target CPU utilization percentage for auto-scaling. If null, uses AWS default."
+  description = "Target CPU utilization percentage for auto-scaling. If null, CPU-based scaling is disabled. The gateway spends most of its time awaiting AWS responses, so this mainly answers the audio and video transcoding that does use the CPU; set autoscaling_alb_target_requests_per_target as well to scale on request volume. No policy is created when the minimum and maximum capacities are equal."
   type        = number
-  default     = null
+  default     = 70
+
+  validation {
+    condition     = var.autoscaling_cpu_target_percent == null || (var.autoscaling_cpu_target_percent > 0 && var.autoscaling_cpu_target_percent <= 100)
+    error_message = "autoscaling_cpu_target_percent must be above 0 and at most 100: it is a percentage of the task's CPU reservation."
+  }
 }
 
 variable "autoscaling_memory_target_percent" {
-  description = "Target memory utilization percentage for auto-scaling. If null, memory-based scaling is disabled."
+  description = "Target memory utilization percentage for auto-scaling. If null, memory-based scaling is disabled. No policy is created when the minimum and maximum capacities are equal."
   type        = number
   default     = null
 }
 
 variable "autoscaling_alb_target_requests_per_target" {
-  description = "Target number of ALB requests per ECS task for auto-scaling. If null or ALB not enabled, request-based scaling is disabled."
+  description = "Target number of ALB requests per ECS task for auto-scaling. If null or ALB not enabled, request-based scaling is disabled. This tracks the load the gateway actually carries more closely than CPU does. No policy is created when the minimum and maximum capacities are equal."
   type        = number
   default     = null
 }
