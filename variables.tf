@@ -1058,7 +1058,7 @@ variable "aws_bedrock_session_encryption_key_arn" {
 }
 
 variable "cloudwatch_metrics" {
-  description = "If True, emit per-request AWS-billed usage as CloudWatch Embedded Metric Format (EMF) log lines. Default to false."
+  description = "If True, emit per-request AWS-billed usage as CloudWatch Embedded Metric Format (EMF) log lines. Left unset, usage_api turns it on, since the usage API answers from these metrics. Default to false."
   type        = bool
   default     = null
 }
@@ -1075,8 +1075,8 @@ variable "cloudwatch_metrics_user_dimension" {
   default     = null
 
   validation {
-    condition     = var.cloudwatch_metrics_user_dimension != true || var.cloudwatch_metrics == true
-    error_message = "Requires cloudwatch_metrics = true: the User dimension is published on the usage metrics, and nothing publishes them otherwise."
+    condition     = var.cloudwatch_metrics_user_dimension != true || var.cloudwatch_metrics != false
+    error_message = "Requires cloudwatch_metrics: the User dimension is published on the usage metrics, and nothing publishes them when it is false. Leave cloudwatch_metrics unset and usage_api turns it on."
   }
 
   validation {
@@ -1097,13 +1097,13 @@ variable "cloudwatch_metrics_region" {
 }
 
 variable "usage_api" {
-  description = "Serve the organization usage and costs endpoints (/v1/organization/usage/*, /v1/organization/costs) from the metrics cloudwatch_metrics publishes (adds the cloudwatch:GetMetricData and cloudwatch:ListMetrics permissions). Every query is billed by CloudWatch per metric read and is excluded from its free tier, and enabling this also stores the usage metrics under additional dimensions. Requires cloudwatch_metrics; the costs endpoint also requires cost_tracking, and without it reports usage with no cost against it. Default to false."
+  description = "Serve the organization usage and costs endpoints (/v1/organization/usage/*, /v1/organization/costs) from the metrics cloudwatch_metrics publishes (adds the cloudwatch:GetMetricData and cloudwatch:ListMetrics permissions). Every query is billed by CloudWatch per metric read and is excluded from its free tier, and enabling this also stores the usage metrics under additional dimensions. Enabling it turns on cloudwatch_metrics and cost_tracking unless either is set explicitly, since the endpoints report nothing without them. Default to false."
   type        = bool
   default     = null
 
   validation {
-    condition     = var.usage_api != true || var.cloudwatch_metrics == true
-    error_message = "Requires cloudwatch_metrics = true: the usage API answers from the metrics it publishes, so without it the task role carries cloudwatch:GetMetricData and cloudwatch:ListMetrics on every metric in the account for queries that can only ever come back empty."
+    condition     = var.usage_api != true || var.cloudwatch_metrics != false
+    error_message = "usage_api cannot be combined with cloudwatch_metrics = false: the usage API answers from the metrics cloudwatch_metrics publishes, so the server would refuse to start and the task role would carry cloudwatch:GetMetricData and cloudwatch:ListMetrics for queries that can only ever come back empty. Leave cloudwatch_metrics unset and usage_api turns it on."
   }
 }
 
@@ -1147,7 +1147,7 @@ variable "usage_api_cache_ttl" {
 }
 
 variable "cost_tracking" {
-  description = "Enable per-request cost estimation from AWS Price List values (adds the pricing:GetProducts permission). Reported costs are an estimate from published prices, not your actual AWS bill; use cost_price_overrides for models the Price List API does not cover. Default to false."
+  description = "Enable per-request cost estimation from AWS Price List values (adds the pricing:GetProducts permission). Reported costs are an estimate from published prices, not your actual AWS bill; use cost_price_overrides for models the Price List API does not cover. Left unset, usage_api turns it on, since the costs endpoint reports nothing without it. Default to false."
   type        = bool
   default     = null
 }
@@ -1183,7 +1183,7 @@ variable "enable_mcp_streamable_http" {
 }
 
 variable "mcp_stateless_http" {
-  description = "Serve the MCP Streamable HTTP transport in stateless mode. Each request is then handled by a fresh transport that keeps no session state, so any client may call /mcp without initializing a session first and any task may serve any request. Required by hosts that provide their own session isolation and inject an 'Mcp-Session-Id' header the server never issued. Requires enable_mcp_streamable_http. Default to false."
+  description = "Serve the MCP Streamable HTTP transport in stateless mode. Each request is then handled by a fresh transport that keeps no session state, so any client may call /mcp without initializing a session first and any task may serve any request. Required by hosts that provide their own session isolation and inject an 'Mcp-Session-Id' header the server never issued. Left unset, enable_mcp_streamable_http is turned on, since this is a mode of that transport. Default to false."
   type        = bool
   default     = null
 }

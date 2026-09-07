@@ -2,6 +2,16 @@
 Server on ECS
 */
 
+locals {
+  # Asking for a feature asks for what it reads from, so the operator turns on one setting
+  # rather than three: the usage API answers from the metrics cloudwatch_metrics publishes and
+  # prices them with cost_tracking, and stateless MCP is a mode of the Streamable HTTP transport.
+  # An explicit value always wins, including an explicit false.
+  cloudwatch_metrics         = var.cloudwatch_metrics != null ? var.cloudwatch_metrics : (var.usage_api == true ? true : null)
+  cost_tracking              = var.cost_tracking != null ? var.cost_tracking : (var.usage_api == true ? true : null)
+  enable_mcp_streamable_http = var.enable_mcp_streamable_http != null ? var.enable_mcp_streamable_http : (var.mcp_stateless_http == true ? true : null)
+}
+
 module "server" {
   source = "JGoutin/ecs-fargate/aws"
   # 1.4 is the first release that deletes the Container Insights log group the ECS
@@ -137,7 +147,7 @@ module "server" {
           GRANIAN_HOST = module.vpc.ipv6_enabled ? "::" : null
         } : k => v if v != null },
         { for k, v in {
-          ENABLE_MCP_STREAMABLE_HTTP                             = var.enable_mcp_streamable_http
+          ENABLE_MCP_STREAMABLE_HTTP                             = local.enable_mcp_streamable_http
           ENABLE_MCP_SSE                                         = var.enable_mcp_sse
           MCP_STATELESS_HTTP                                     = var.mcp_stateless_http
           AWS_S3_ACCELERATE                                      = var.aws_s3_accelerate
@@ -184,7 +194,7 @@ module "server" {
           SHUTDOWN_DRAIN_TIMEOUT                                 = var.shutdown_drain_timeout
           AWS_BEDROCK_DEPRECATED_MODEL_FALLBACK                  = var.aws_bedrock_deprecated_model_fallback
           AWS_S3_VIDEOS_EXPIRES_AFTER                            = var.aws_s3_videos_expires_after
-          CLOUDWATCH_METRICS                                     = var.cloudwatch_metrics
+          CLOUDWATCH_METRICS                                     = local.cloudwatch_metrics
           CLOUDWATCH_METRICS_USER_DIMENSION                      = var.cloudwatch_metrics_user_dimension
           CLOUDWATCH_METRICS_REGION                              = var.cloudwatch_metrics_region
           USAGE_API                                              = var.usage_api
@@ -192,7 +202,7 @@ module "server" {
           USAGE_API_MAX_METRICS                                  = var.usage_api_max_metrics
           USAGE_API_MAX_RANGE_DAYS                               = var.usage_api_max_range_days
           USAGE_API_CACHE_TTL                                    = var.usage_api_cache_ttl
-          COST_TRACKING                                          = var.cost_tracking
+          COST_TRACKING                                          = local.cost_tracking
           AWS_BEDROCK_MANTLE_ENABLED                             = var.aws_bedrock_mantle_enabled
           AWS_BEDROCK_MANTLE_SERVICE_HEADER                      = var.aws_bedrock_mantle_service_header
           AWS_BEDROCK_ALLOW_MANTLE_PROJECT_OVERRIDE              = var.aws_bedrock_allow_mantle_project_override
@@ -647,7 +657,7 @@ data "aws_iam_policy_document" "server_services" {
 
   # Pricing - Cost Tracking (Optional)
   dynamic "statement" {
-    for_each = var.cost_tracking == true ? [1] : []
+    for_each = local.cost_tracking == true ? [1] : []
     content {
       sid       = "PricingCostTracking"
       actions   = ["pricing:GetProducts"]
