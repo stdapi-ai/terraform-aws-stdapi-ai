@@ -90,6 +90,7 @@ module "server" {
           AWS_DYNAMODB_REGION                      = local.dynamodb_table_name != null ? local.dynamodb_region : null
           TENANT_API_KEYS                          = local.tenant_keys_enabled ? true : null
           TENANT_KEY_SSM_PARAMETER_PREFIX          = local.tenant_key_ssm_parameter_prefix
+          TENANT_KEY_CACHE_SECONDS                 = local.tenant_keys_enabled ? var.tenant_key_cache_seconds : null
           TENANT_AWS_CREDENTIALS                   = length(local.tenant_role_arns) > 0 ? true : null
           REALTIME_WEBRTC_ENABLED                  = var.realtime_webrtc_media_enabled ? true : null
           REALTIME_WEBRTC_STUN_SERVER              = var.realtime_webrtc_media_enabled ? var.realtime_webrtc_stun_server : null

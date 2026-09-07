@@ -740,6 +740,17 @@ variable "aws_translate_region" {
 # of its own: it is created with the first feature that needs it, in this deployment's region, on
 # this deployment's KMS key, and destroyed with the last of them. See dynamodb.tf.
 
+variable "tenant_key_cache_seconds" {
+  description = "Seconds each server instance caches a tenant API key validation before re-reading the shared table. This is the revocation window: a key revoked, disabled or re-scoped in 'tenants' keeps its previous decision for up to this long per instance, traded against the table reads a shorter window costs. 0 reads the table on every request. Only applied when tenants is non-empty. Default to 60."
+  type        = number
+  default     = null
+
+  validation {
+    condition     = var.tenant_key_cache_seconds == null || try(var.tenant_key_cache_seconds >= 0, false)
+    error_message = "tenant_key_cache_seconds cannot be negative: it is a number of seconds."
+  }
+}
+
 variable "tenants" {
   description = "Per-tenant API keys, one entry per tenant keyed by the tenant's name. Terraform owns each tenant's record in the shared DynamoDB table — identity, model allow/deny lists, endpoint restrictions (glob patterns against route path templates such as '/v1/chat/completions'), the disabled flag, and optionally 'aws_role_arn', an IAM role of the tenant's own AWS account its model invocations then run under (its own Amazon Bedrock quota and bill) — in the shared DynamoDB table this module creates for the first tenant declared. Declaring a role enables tenant AWS credentials on the server, grants the task role 'sts:AssumeRole' on exactly the declared roles, and cannot be combined with Amazon Bedrock Guardrails; the tenant must condition its role's trust policy on the ExternalId the server mints (read it from the tenant's 'secret#<key id>' record). The key secret never enters Terraform state: the server mints it and delivers it once through the SSM parameter named in the tenant_keys output. That parameter is a SecureString encrypted with this deployment's own KMS key, so reading the key also takes kms:Decrypt on that key and not merely ssm:GetParameter on the path: retrieve it and delete it as soon as it appears. An absent list restricts nothing; an empty list allows nothing; deny wins over allow. Default to no tenants, which leaves tenant API keys disabled."
   type = map(object({
