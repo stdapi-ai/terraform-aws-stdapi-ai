@@ -1449,7 +1449,7 @@ variable "realtime_allow_session_override" {
 variable "version_to_deploy" {
   description = "Container image version tag from AWS Marketplace. Defaults to the server version this module release was built and tested against, which is what makes a given module version reproducible; there is no 'latest' resolution. Raise it to take a newer server without changing module version, or lower it to roll back. A '-arm64' or '-amd64' suffix is appended automatically based on var.cpu_architecture, so the value must not include an architecture suffix."
   type        = string
-  default     = "1.16.1"
+  default     = "1.17.0"
 }
 
 # KMS configuration
