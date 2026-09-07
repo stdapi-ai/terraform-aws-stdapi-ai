@@ -3,7 +3,7 @@
 [![Terraform Module](https://img.shields.io/badge/Terraform-Registry%20module-844FBA?logo=terraform&logoColor=ffffff)](https://registry.terraform.io/modules/stdapi-ai/stdapi-ai/aws/latest)
 [![OpenTofu Module](https://img.shields.io/badge/OpenTofu-Registry%20module-FFDA18?logo=opentofu&logoColor=ffffff)](https://search.opentofu.org/module/stdapi-ai/stdapi-ai/aws/latest)
 
-**Deploy an OpenAI, Anthropic & Cohere compatible AI gateway on AWS.** ECS Fargate infrastructure with auto-scaling, private subnets, KMS encryption and least-privilege IAM by default; HTTPS, WAF, API key authentication and CloudWatch alarms are opt-in inputs — see [What this minimal configuration deploys](#minimal-deployment) and [What gets provisioned, and when](#what-gets-provisioned-and-when).
+**Deploy an OpenAI, Anthropic, Cohere & Ollama compatible AI gateway on AWS.** ECS Fargate infrastructure with auto-scaling, private subnets, KMS encryption and least-privilege IAM by default; HTTPS, WAF, API key authentication and CloudWatch alarms are opt-in inputs — see [What this minimal configuration deploys](#minimal-deployment) and [What gets provisioned, and when](#what-gets-provisioned-and-when).
 
 🌐 [Documentation](https://stdapi.ai/?utm_source=terraform-readme&utm_medium=repo&utm_campaign=owned-surfaces) · 🚀 [Start 14-Day Free Trial](https://aws.amazon.com/marketplace/pp/prodview-su2dajk5zawpo) · 💻 [GitHub Repository](https://github.com/stdapi-ai/stdapi.ai)
 
@@ -14,7 +14,7 @@
 1. **[Subscribe to stdapi.ai](https://aws.amazon.com/marketplace/pp/prodview-su2dajk5zawpo)** on AWS Marketplace (14-day free trial included)
 2. Install [Terraform](https://www.terraform.io/downloads) or [OpenTofu](https://opentofu.org/docs/intro/install/) >= 1.9 — see [Requirements](#requirements) for exact version constraints
 3. Configure [AWS credentials](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-files.html) with IAM permissions to create VPC, ECS, Application Auto Scaling, ALB, S3, KMS, IAM, SSM Parameter Store, SQS, DynamoDB and CloudWatch resources — plus ACM, Route 53 and WAFv2 for a deployment that serves HTTPS on its own domain (`alb_domain_name`) or enables the WAF (`alb_waf_enabled`)
-4. To enable tenant API keys (`tenants`) or the shared model cache (`model_cache_shared`), the principal running Terraform additionally needs **`kms:CreateGrant` and `kms:DescribeKey`** on the deployment's KMS key. Those features create the shared DynamoDB table, which is encrypted with that key, and DynamoDB reaches it through a grant created at table creation time. An administrator principal already has both; a narrowly scoped deployment role may not, and will fail at apply with an explicit KMS authorization error. There is deliberately no fallback to the AWS owned key: silently downgrading the table to weaker encryption is worse than failing where you can see it.
+4. Tenant API keys (`tenants`) and the shared model cache (`model_cache_shared`) also need **`kms:CreateGrant` and `kms:DescribeKey`** on the deployment's KMS key — see [Shared DynamoDB table](#other-options)
 
 Deployable in any AWS region with ECS Fargate support.
 
@@ -65,14 +65,6 @@ module "stdapi_ai" {
 ```
 
 For ready-to-deploy variants (single-region, EU/US multi-region, Open WebUI), see the [**samples repository**](https://github.com/stdapi-ai/samples). For deeper patterns (BYO VPC / ALB / Route 53 / S3, manual ECS, cost-optimized), see the [**advanced deployment guide**](https://stdapi.ai/operations_deploy_advanced/?utm_source=terraform-readme&utm_medium=repo&utm_campaign=owned-surfaces).
-
-## License and Cost
-
-stdapi.ai is dual-licensed: [**AGPL-3.0-or-later**](LICENSE-AGPL) for the free community container image, or a [**commercial license**](LICENSE-COMMERCIAL) obtained by subscribing on AWS Marketplace. **This module is commercial-only by construction** — it deploys the Marketplace ECR image, so an active Marketplace subscription is required. To run the AGPL community image instead, see the [local deployment guide](https://stdapi.ai/operations_getting_started_local/?utm_source=terraform-readme&utm_medium=repo&utm_campaign=owned-surfaces).
-
-The Marketplace license is metered at **$0.10 per container-hour**, with a **14-day free trial** on the license. `autoscaling_min_capacity` defaults to one task per availability zone and `availability_zones_count` defaults to all AZs in the region, so a default deployment in a 3-AZ region runs 3 tasks — about **$216/month in license** (720 h × $0.10 × 3), and about $432/month in a 6-AZ region such as `us-east-1`. Those are the floor, not the ceiling: `autoscaling_cpu_target_percent` defaults to 70, so the fleet scales out under CPU pressure up to `autoscaling_max_capacity`, five times the minimum unless you set it. Set `availability_zones_count`, `autoscaling_min_capacity` and `autoscaling_max_capacity` explicitly to control this, or `autoscaling_cpu_target_percent = null` to hold the fleet at a fixed size.
-
-Only the license is covered by the trial. AWS resources this module creates (Fargate, ALB, NAT gateways, KMS, CloudWatch, S3, SQS) and Amazon Bedrock inference are billed by AWS from the first hour, with no markup. Of those, the indexing queues are the one resource with no standing charge at all: [Amazon SQS bills per request](https://aws.amazon.com/sqs/pricing/), an idle queue costs nothing, and indexing a file is a handful of requests. See the [cost management guide](https://stdapi.ai/operations_cost_management/?utm_source=terraform-readme&utm_medium=repo&utm_campaign=owned-surfaces) and the [licensing guide](https://stdapi.ai/operations_licensing/?utm_source=terraform-readme&utm_medium=repo&utm_campaign=owned-surfaces).
 
 ## Module Features
 
@@ -151,21 +143,44 @@ Production-ready infrastructure following AWS Well-Architected Framework:
 | **Amazon SageMaker AI endpoint permissions** (your own endpoints published as chat models)                                                                                        | One entry in `aws_sagemaker_endpoints`. No endpoint is created: the task role gains `sagemaker:InvokeEndpoint` on exactly the endpoint ARNs you name, plus `sagemaker:CallWithBearerToken` on `*` — the action that mints the short-term key the OpenAI-compatible route authenticates with, which AWS defines with no resource-level scope. Endpoint hours are billed by SageMaker AI, not by the token.                                                      |
 | **Usage & costs API** (`/v1/organization/usage/*`, `/v1/organization/costs`)                                                                                                     | `usage_api = true`, which turns on `cloudwatch_metrics` (it answers from those metrics) and `cost_tracking` (what puts a cost against the usage) unless either is set explicitly, and adds `cloudwatch:GetMetricData` and `cloudwatch:ListMetrics`. Every query is billed by CloudWatch per metric read and is outside its free tier. `cloudwatch_metrics_user_dimension = true` is what allows grouping by `user_id`, at one custom metric series per user, model and metric name.  |
 | **Shared Bedrock model list** (one discovery pass per fleet)                                                                                                                      | `model_cache_shared = true`, which creates the shared DynamoDB table for it. One server refreshes the list and publishes it while the others read it, so a starting task is ready without a discovery pass of its own. Billed on the published list, roughly $0.60 to $2 per month at the default `model_cache_seconds`.                                                                                                                                      |
-| CloudWatch alarms (ECS service alarms, plus one on error/critical log lines) | Setting `sns_topic_arn`, which is what the alarms notify. `alarms_enabled` overrides that either way: `true` without a topic creates all five alarms with no action, `false` with a topic creates nothing. |
+| CloudWatch alarms (ECS service alarms, plus one on error/critical log lines) | Setting `sns_topic_arn`, which is what the alarms notify. `alarms_enabled` overrides that either way: `true` without a topic creates up to five alarms with no action, `false` with a topic creates nothing. |
 | VPC Flow Logs                                                                                                                                                                     | `vpc_flow_log_enabled` (default `true`)                                                                                                                                                                                                                                                                                                                        |
 
 ## Examples & Integration
 
-Ready-to-deploy Terraform examples live in the [**stdapi.ai samples repository**](https://github.com/stdapi-ai/samples):
+Ready-to-deploy Terraform examples live in the [**stdapi.ai samples repository**](https://github.com/stdapi-ai/samples).
+
+**Deployment shapes** — the gateway on its own:
 
 | Example | What it deploys |
 |---|---|
 | [getting_started_production](https://github.com/stdapi-ai/samples/tree/main/getting_started_production) | Single-region production deployment with HTTPS, WAF, auto-scaling |
 | [getting_started_production_gdpr](https://github.com/stdapi-ai/samples/tree/main/getting_started_production_gdpr) | Multi-region EU deployment (4 regions) for GDPR data residency |
 | [getting_started_production_us](https://github.com/stdapi-ai/samples/tree/main/getting_started_production_us) | Multi-region US deployment (3 regions) for high availability |
-| [getting_started_openwebui](https://github.com/stdapi-ai/samples/tree/main/getting_started_openwebui) | Full Open WebUI chat platform stack (Aurora + Valkey + SearXNG + stdapi.ai) |
+| [getting_started_cognito](https://github.com/stdapi-ai/samples/tree/main/getting_started_cognito) | Amazon Cognito user pool authentication instead of a shared API key |
+
+**Application integrations** — an application in front of a single-region gateway:
+
+| Example | What it deploys |
+|---|---|
+| [getting_started_openwebui](https://github.com/stdapi-ai/samples/tree/main/getting_started_openwebui) | Full Open WebUI chat platform stack (Aurora PostgreSQL + Valkey + SearXNG + stdapi.ai) |
+| [getting_started_lobehub](https://github.com/stdapi-ai/samples/tree/main/getting_started_lobehub) | LobeHub chat UI (Postgres on EFS + Valkey + S3) |
+| [getting_started_n8n](https://github.com/stdapi-ai/samples/tree/main/getting_started_n8n) | n8n workflow automation over the full route surface (Aurora PostgreSQL + Valkey + EFS) |
+| [getting_started_hermes](https://github.com/stdapi-ai/samples/tree/main/getting_started_hermes) | Hermes Agent's autonomous agent loop on Bedrock (EFS) |
+| [getting_started_openclaw](https://github.com/stdapi-ai/samples/tree/main/getting_started_openclaw) | OpenClaw personal-assistant and coding-agent gateway (EFS) |
+| [getting_started_home_assistant](https://github.com/stdapi-ai/samples/tree/main/getting_started_home_assistant) | Home Assistant Assist voice through Amazon Transcribe and Polly (EFS + RDS PostgreSQL Multi-AZ) |
+| [getting_started_docling](https://github.com/stdapi-ai/samples/tree/main/getting_started_docling) | Docling Serve document conversion, the ingestion stage of a RAG pipeline |
+| [getting_started_ragflow](https://github.com/stdapi-ai/samples/tree/main/getting_started_ragflow) | RAGFlow document Q&A over your own corpus (Amazon OpenSearch + Aurora PostgreSQL + Valkey + S3) |
 
 For integration against existing infrastructure and non-Terraform deployments, see the [advanced deployment guide](https://stdapi.ai/operations_deploy_advanced/?utm_source=terraform-readme&utm_medium=repo&utm_campaign=owned-surfaces).
+
+## License and Cost
+
+stdapi.ai is dual-licensed: [**AGPL-3.0-or-later**](LICENSE-AGPL) for the free community container image, or a [**commercial license**](LICENSE-COMMERCIAL) obtained by subscribing on AWS Marketplace. **This module is commercial-only by construction** — it deploys the Marketplace ECR image, so an active Marketplace subscription is required. To run the AGPL community image instead, see the [local deployment guide](https://stdapi.ai/operations_getting_started_local/?utm_source=terraform-readme&utm_medium=repo&utm_campaign=owned-surfaces).
+
+The Marketplace license is metered at **$0.10 per container-hour**, with a **14-day free trial** on the license. `autoscaling_min_capacity` defaults to one task per availability zone and `availability_zones_count` defaults to all AZs in the region, so a default deployment in a 3-AZ region runs 3 tasks — about **$216/month in license** (720 h × $0.10 × 3), and about $432/month in a 6-AZ region such as `us-east-1`. Those are the floor, not the ceiling: `autoscaling_cpu_target_percent` defaults to 70, so the fleet scales out under CPU pressure up to `autoscaling_max_capacity`, five times the minimum unless you set it. Set `availability_zones_count`, `autoscaling_min_capacity` and `autoscaling_max_capacity` explicitly to control this, or `autoscaling_cpu_target_percent = null` to hold the fleet at a fixed size.
+
+Only the license is covered by the trial. AWS resources this module creates (Fargate, ALB, NAT gateways, KMS, CloudWatch, S3, SQS) and Amazon Bedrock inference are billed by AWS from the first hour, with no markup. Of those, the indexing queues are the one resource with no standing charge at all: [Amazon SQS bills per request](https://aws.amazon.com/sqs/pricing/), an idle queue costs nothing, and indexing a file is a handful of requests. See the [cost management guide](https://stdapi.ai/operations_cost_management/?utm_source=terraform-readme&utm_medium=repo&utm_campaign=owned-surfaces) and the [licensing guide](https://stdapi.ai/operations_licensing/?utm_source=terraform-readme&utm_medium=repo&utm_campaign=owned-surfaces).
 
 ## Documentation
 
@@ -316,16 +331,16 @@ Independent toggles that aren't required to pass any control above. Only the Web
 
 | Control | Severity | Title | Status | Notes |
 |---|---|---|---|---|
-| CloudWatch.15 | 🟠 High | CloudWatch alarms should have specified actions configured | ⚠️ Conditional (default: N/A — no alarms) | `alarms_enabled` defaults to whether `sns_topic_arn` is set, so setting the topic is what creates the alarms and every one of them attaches it: the control passes. `alarms_enabled = true` with no topic creates the same five alarms with no action and fails it; `alarms_enabled = false` suppresses them all and leaves it N/A. |
+| CloudWatch.15 | 🟠 High | CloudWatch alarms should have specified actions configured | ⚠️ Conditional (default: N/A — no alarms) | `alarms_enabled` defaults to whether `sns_topic_arn` is set, so setting the topic is what creates the alarms and every one of them attaches it: the control passes. `alarms_enabled = true` with no topic creates the same alarms with no action and fails it; `alarms_enabled = false` suppresses them all and leaves it N/A. |
 
-Enabling it creates five alarms:
+Enabling it creates up to five alarms:
 - **High memory usage** — ECS service `MemoryUtilization` > 90% for 4 of 5 one-minute periods.
 - **Unhealthy containers** — ECS service `HealthCheckFailed` > 0.
 - **CPU anomaly detection** — CloudWatch anomaly-detection band around `CPUUtilization`; fires when usage exceeds the expected upper bound.
 - **Max autoscaling capacity reached** — Container Insights `DesiredTaskCount` >= `autoscaling_max_capacity` (only created if min/max capacity differ and Container Insights is enabled).
 - **Application error/critical logs** — a log metric filter counts `error`/`ERROR`/`critical`/`CRITICAL` matches in the app's CloudWatch log group; fires when any appear within a 60-second period.
 
-None of the five requires `sns_topic_arn`: each attaches the topic as its action when one is set, and is created without any action when there is none. So `alarms_enabled = true` with no topic bills you for all five — the anomaly-detection one at the higher anomaly-detection rate — and notifies nobody.
+None of them requires `sns_topic_arn`: each attaches the topic as its action when one is set, and is created without any action when there is none. So `alarms_enabled = true` with no topic bills you for every alarm created — four when `autoscaling_min_capacity` equals `autoscaling_max_capacity`, since the max-capacity alarm is then not created, and the anomaly-detection one at the higher anomaly-detection rate — and notifies nobody.
 
 **Durable vector store indexing** (`aws_sqs_vector_store_queue_create = true`, the default, effective once the Vector Stores API is enabled)
 
@@ -350,7 +365,7 @@ The dead-letter queue additionally carries a `RedriveAllowPolicy` restricted to 
 | DynamoDB.5 | 🔵 Low | DynamoDB tables should be tagged | ✅ Pass | The table gets the non-null `tags` plus a `Name` tag, so a tag key always exists. |
 | DynamoDB.6 | 🟡 Medium | DynamoDB tables should have deletion protection enabled | ⚠️ Conditional (pass with tenant API keys enabled) | `deletion_protection_enabled` is derived from what the table holds, not from `deletion_protection`. With tenant API keys enabled — `tenants` declared, or `tenant_api_keys = true` — the table holds the tenant secret hashes and salts the server minted — they exist nowhere else, and losing them invalidates every tenant credential with no way back — so protection is on and the control passes. Holding only the shared models list, the table is a cache: a manifest, compressed shards and a 120-second lease, all TTL'd and all rebuilt by the next discovery sweep. There is nothing there to protect and a protected cache is only a destroy that cannot finish, so protection is off and the control reports a finding on a table whose entire contents are disposable. |
 
-The table is encrypted with this deployment's own KMS key, the same one the S3 buckets, the log groups and the queues use — there is nothing to configure and no AWS owned key fallback. DynamoDB reaches the key through a grant it creates when the table is created, so the ECS task role needs no KMS permission for table reads and writes; the principal running Terraform does need `kms:CreateGrant` and `kms:DescribeKey` on that key (see [Prerequisites](#prerequisites)).
+The table is encrypted with this deployment's own KMS key, the same one the S3 buckets, the log groups and the queues use — there is nothing to configure and no AWS owned key fallback. DynamoDB reaches the key through a grant it creates when the table is created, so the ECS task role needs no KMS permission for table reads and writes; the principal running Terraform does need `kms:CreateGrant` and `kms:DescribeKey` on that key (see [Prerequisites](#prerequisites)). An administrator principal already has both; a narrowly scoped deployment role may not, and fails at apply with an explicit KMS authorization error. There is deliberately no fallback to the AWS owned key: silently downgrading the table to weaker encryption is worse than failing where you can see it.
 
 #### Destroying a deployment with tenant API keys
 
