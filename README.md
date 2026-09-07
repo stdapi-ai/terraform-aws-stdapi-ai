@@ -398,7 +398,7 @@ All the options above are off by default and never required to pass a control in
 
 | Name | Version |
 | ---- | ------- |
-| <a name="provider_aws"></a> [aws](#provider\_aws) | 6.61.0 |
+| <a name="provider_aws"></a> [aws](#provider\_aws) | 6.63.0 |
 | <a name="provider_random"></a> [random](#provider\_random) | 3.9.0 |
 | <a name="provider_terraform"></a> [terraform](#provider\_terraform) | n/a |
 
@@ -410,7 +410,7 @@ All the options above are off by default and never required to pass a control in
 | <a name="module_regional_kms"></a> [regional\_kms](#module\_regional\_kms) | JGoutin/kms-key/aws | ~> 1.2 |
 | <a name="module_server"></a> [server](#module\_server) | JGoutin/ecs-fargate/aws | >= 1.4.4, < 2.0.0 |
 | <a name="module_vectors_kms"></a> [vectors\_kms](#module\_vectors\_kms) | JGoutin/kms-key/aws | ~> 1.2 |
-| <a name="module_vpc"></a> [vpc](#module\_vpc) | JGoutin/vpc/aws | ~> 1.5 |
+| <a name="module_vpc"></a> [vpc](#module\_vpc) | JGoutin/vpc/aws | ~> 1.6 |
 
 ## Resources
 
@@ -490,6 +490,7 @@ All the options above are off by default and never required to pass a control in
 | [random_password.realtime_client_secret_key](https://registry.terraform.io/providers/hashicorp/random/latest/docs/resources/password) | resource |
 | [random_string.tenant_key_id](https://registry.terraform.io/providers/hashicorp/random/latest/docs/resources/string) | resource |
 | [terraform_data.bedrock_user_role_validation](https://registry.terraform.io/providers/hashicorp/terraform/latest/docs/resources/data) | resource |
+| [terraform_data.enforced_vpc_endpoints_validation](https://registry.terraform.io/providers/hashicorp/terraform/latest/docs/resources/data) | resource |
 | [terraform_data.realtime_webrtc_media_validation](https://registry.terraform.io/providers/hashicorp/terraform/latest/docs/resources/data) | resource |
 | [terraform_data.vector_store_validation](https://registry.terraform.io/providers/hashicorp/terraform/latest/docs/resources/data) | resource |
 | [aws_caller_identity.current](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/caller_identity) | data source |

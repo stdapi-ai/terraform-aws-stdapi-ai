@@ -46,6 +46,17 @@ locals {
   )
 }
 
+# Without a certificate there is no 443 listener to redirect to, so the port 80 listener forwards
+# straight to the target group and every request crosses the network in the clear. A warning rather
+# than an error: standing a trial deployment up before owning a domain is a supported shape. The
+# private zone case below narrows the same condition to the one cause a setting cannot fix.
+check "alb_serves_plaintext_without_a_certificate" {
+  assert {
+    condition     = !(var.alb_enabled && !local.certificate_will_exist)
+    error_message = "alb_enabled is set with no certificate, so the load balancer serves the API over plain HTTP on port 80 and traffic between clients and the load balancer is unencrypted, API keys included. That is fine for a trial deployment. To serve HTTPS, set alb_certificate_arn to a certificate you already hold, or set alb_domain_name to a name in a public Route 53 zone and let this module issue one."
+  }
+}
+
 # ACM validates a domain by publishing a DNS record the public resolvers must answer, which a
 # private hosted zone cannot do, so alb_certificate_create is silently inert against one. The
 # result applies cleanly and serves plain HTTP on port 80, with no 443 listener and no redirect.
