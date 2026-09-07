@@ -1,0 +1,17 @@
+formatter: markdown table
+
+output:
+  file: README.md
+  mode: inject
+
+sort:
+  enabled: true
+  by: required
+
+settings:
+  # Required inputs first, so the handful a deployment must decide is not lost
+  # among the optional ones.
+  required: true
+  # Ignore .terraform.lock.hcl: the Providers table must render the constraints
+  # version.tf declares, never the provider versions installed locally.
+  lockfile: false
