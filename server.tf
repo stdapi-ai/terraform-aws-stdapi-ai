@@ -73,6 +73,7 @@ module "server" {
           AWS_BEDROCK_MANTLE_REGIONS               = var.aws_bedrock_mantle_regions != null ? join(",", var.aws_bedrock_mantle_regions) : null
           AWS_BEDROCK_MANTLE_PREFERRED_MODELS      = var.aws_bedrock_mantle_preferred_models != null ? join(",", var.aws_bedrock_mantle_preferred_models) : null
           AWS_BEDROCK_MANTLE_PROJECT               = var.aws_bedrock_mantle_project
+          AWS_BEDROCK_MANTLE_ENDPOINT_URL          = var.aws_bedrock_mantle_endpoint_url
           AWS_BEDROCK_MARKETPLACE_ENDPOINT_REGIONS = var.aws_bedrock_marketplace_endpoint_regions != null ? join(",", var.aws_bedrock_marketplace_endpoint_regions) : null
           AWS_BEDROCK_GUARDRAIL_IDENTIFIER         = var.aws_bedrock_guardrail_identifier
           AWS_BEDROCK_GUARDRAIL_VERSION            = var.aws_bedrock_guardrail_version
@@ -98,16 +99,16 @@ module "server" {
           AWS_TRANSLATE_REGION                     = var.aws_translate_region
           AWS_DYNAMODB_TABLE                       = local.dynamodb_table_name
           AWS_DYNAMODB_REGION                      = local.dynamodb_table_name != null ? local.dynamodb_region : null
-          TENANT_API_KEYS                          = local.tenant_keys_enabled ? true : null
+          TENANT_API_KEYS                          = local.tenant_api_keys_enabled ? true : null
           TENANT_KEY_SSM_PARAMETER_PREFIX          = local.tenant_key_ssm_parameter_prefix
-          TENANT_KEY_CACHE_SECONDS                 = local.tenant_keys_enabled ? var.tenant_key_cache_seconds : null
-          TENANT_AWS_CREDENTIALS                   = length(local.tenant_role_arns) > 0 ? true : null
-          REALTIME_WEBRTC_ENABLED                  = var.realtime_webrtc_media_enabled ? true : null
-          REALTIME_WEBRTC_STUN_SERVER              = var.realtime_webrtc_media_enabled ? var.realtime_webrtc_stun_server : null
-          REALTIME_WEBRTC_TURN_SERVER              = var.realtime_webrtc_media_enabled ? var.realtime_webrtc_turn_server : null
-          REALTIME_WEBRTC_TURN_USERNAME            = var.realtime_webrtc_media_enabled ? var.realtime_webrtc_turn_username : null
-          REALTIME_WEBRTC_ALLOW_PRIVATE_CANDIDATES = var.realtime_webrtc_media_enabled ? var.realtime_webrtc_allow_private_candidates : null
-          TENANT_KEY_SSM_KMS_KEY_ID                = local.tenant_keys_enabled ? module.kms_key.arn : null
+          TENANT_KEY_CACHE_SECONDS                 = local.tenant_api_keys_enabled ? var.tenant_key_cache_seconds : null
+          TENANT_AWS_CREDENTIALS                   = local.tenant_aws_credentials_enabled ? true : null
+          REALTIME_WEBRTC_ENABLED                  = local.realtime_webrtc_enabled ? true : null
+          REALTIME_WEBRTC_STUN_SERVER              = local.realtime_webrtc_enabled ? var.realtime_webrtc_stun_server : null
+          REALTIME_WEBRTC_TURN_SERVER              = local.realtime_webrtc_enabled ? var.realtime_webrtc_turn_server : null
+          REALTIME_WEBRTC_TURN_USERNAME            = local.realtime_webrtc_enabled ? var.realtime_webrtc_turn_username : null
+          REALTIME_WEBRTC_ALLOW_PRIVATE_CANDIDATES = local.realtime_webrtc_enabled ? var.realtime_webrtc_allow_private_candidates : null
+          TENANT_KEY_SSM_KMS_KEY_ID                = local.tenant_api_keys_enabled ? local.tenant_key_ssm_kms_key_arn : null
           TIMEZONE                                 = var.timezone
           OPENAI_ROUTES_PREFIX                     = var.openai_routes_prefix
           ANTHROPIC_ROUTES_PREFIX                  = var.anthropic_routes_prefix
@@ -178,6 +179,7 @@ module "server" {
           MODEL_CACHE_MAX_STALE_SECONDS                          = var.model_cache_max_stale_seconds
           MODEL_CACHE_SHARED                                     = var.model_cache_shared
           DROP_UNSUPPORTED_SYSTEM_PROMPT                         = var.drop_unsupported_system_prompt
+          CHAT_COMPLETIONS_REASONING_FIELD                       = var.chat_completions_reasoning_field
           AWS_BEDROCK_ALLOW_GUARDRAIL_OVERRIDE                   = var.aws_bedrock_allow_guardrail_override
           AWS_BEDROCK_ALLOW_SERVICE_TIER_OVERRIDE                = var.aws_bedrock_allow_service_tier_override
           ANTHROPIC_BETA_FILTER                                  = var.anthropic_beta_filter
@@ -239,7 +241,10 @@ module "server" {
         var.realtime_client_secret_key != null || local.create_realtime_client_secret_key ? {
           REALTIME_CLIENT_SECRET_KEY = local.realtime_client_secret_key
         } : {},
-        var.realtime_webrtc_media_enabled && var.realtime_webrtc_turn_password != null ? {
+        # Follows the same reported-enabled state as REALTIME_WEBRTC_TURN_SERVER and
+        # REALTIME_WEBRTC_TURN_USERNAME above: leaving this one behind media_enabled would report
+        # a TURN server and username with no password to authenticate them.
+        local.realtime_webrtc_enabled && var.realtime_webrtc_turn_password != null ? {
           REALTIME_WEBRTC_TURN_PASSWORD = var.realtime_webrtc_turn_password
         } : {},
       )
@@ -1052,9 +1057,12 @@ data "aws_iam_policy_document" "server_services" {
   # SSM Parameter Store - Tenant API key delivery (Optional)
   # PutParameter writes each minted key exactly once (Overwrite=False); GetParameter is the
   # crash recovery that re-reads a delivered key whose hash was never recorded. Scoped to this
-  # deployment's own prefix, so the role can never read another deployment's tenant keys.
+  # deployment's own prefix, so the role can never read another deployment's tenant keys. Follows
+  # tenant_api_keys_enabled rather than tenants being non-empty: the grant is scoped to the prefix
+  # itself, not to any individual tenant, so it exists whenever the server validates tenant keys
+  # and widens nothing when Terraform declares none.
   dynamic "statement" {
-    for_each = local.tenant_keys_enabled ? [1] : []
+    for_each = local.tenant_api_keys_enabled ? [1] : []
     content {
       sid = "SsmTenantKeyDelivery"
       actions = [
@@ -1072,8 +1080,10 @@ data "aws_iam_policy_document" "server_services" {
   # Parameter Store encrypts a standard SecureString with kms:Encrypt and an advanced one
   # with kms:GenerateDataKey (the account's default parameter tier decides which), and reads
   # either back with kms:Decrypt. ViaService keeps the grant unusable outside Parameter Store.
+  # Follows tenant_api_keys_enabled rather than tenants being non-empty, for the same reason as
+  # the SSM statement above: the grant is scoped to the key itself, not to any individual tenant.
   dynamic "statement" {
-    for_each = local.tenant_keys_enabled ? [1] : []
+    for_each = local.tenant_api_keys_enabled ? [1] : []
     content {
       sid = "KMSTenantKeyDelivery"
       actions = [
@@ -1081,7 +1091,7 @@ data "aws_iam_policy_document" "server_services" {
         "kms:GenerateDataKey",
         "kms:Decrypt",
       ]
-      resources = [module.kms_key.arn]
+      resources = [local.tenant_key_ssm_kms_key_arn]
       condition {
         test     = "StringEquals"
         variable = "kms:ViaService"

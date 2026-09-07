@@ -200,6 +200,17 @@ variable "aws_bedrock_mantle_project" {
   default     = null
 }
 
+variable "aws_bedrock_mantle_endpoint_url" {
+  description = "Override the Amazon Bedrock Mantle endpoint URL template, with '{region}' substituted for the target region. Point it at a VPC endpoint or an inspection proxy you already operate. Default to 'https://bedrock-mantle.{region}.api.aws'."
+  type        = string
+  default     = null
+
+  validation {
+    condition     = var.aws_bedrock_mantle_endpoint_url == null || startswith(coalesce(var.aws_bedrock_mantle_endpoint_url, "https://"), "https://")
+    error_message = "aws_bedrock_mantle_endpoint_url must start with 'https://': the server refuses a plaintext Bedrock endpoint."
+  }
+}
+
 variable "aws_bedrock_allow_mantle_project_override" {
   description = "If true, allow clients to override the configured Amazon Bedrock Mantle project per request via the 'OpenAI-Project' / 'anthropic-workspace' header. Default to false."
   type        = bool
@@ -736,12 +747,39 @@ variable "aws_translate_region" {
   default     = null
 }
 
-# The shared DynamoDB table holding the tenant records and the shared models list has no settings
-# of its own: it is created with the first feature that needs it, in this deployment's region, on
-# this deployment's KMS key, and destroyed with the last of them. See dynamodb.tf.
+# The shared DynamoDB table holding the tenant records and the shared models list is created with
+# the first feature that needs it, in aws_dynamodb_region and on this deployment's KMS key, and
+# destroyed with the last of them -- unless aws_dynamodb_table points it at a table of your own.
+# See dynamodb.tf.
+
+variable "aws_dynamodb_table" {
+  description = "Existing DynamoDB table name backing the tenant records and the shared models list, in place of the table this module creates automatically. Must carry a string hash key 'pk', a string range key 'sk', and TTL enabled on the 'expires_at' attribute -- see the aws_dynamodb_table.main resource in dynamodb.tf for the schema. When specified, no table is created, and the task role's DynamoDB grant is scoped to this table's ARN, composed from this name and aws_dynamodb_region (or the deployment's own region) rather than read back from a Terraform-managed resource. Default to none, meaning a table is created automatically the first time tenants or model_cache_shared needs one."
+  type        = string
+  default     = null
+}
+
+variable "aws_dynamodb_region" {
+  description = "AWS region holding the DynamoDB table. Embedded in the task role's DynamoDB grant, so a table in another region only works when this setting names it. A table this module creates is encrypted with this deployment's own regional KMS key, which cannot encrypt a table in another region, so this must match the deployment's region while the module creates the table; only a table supplied through aws_dynamodb_table is free to live in whatever region this setting names. A DynamoDB table has no built-in cross-region replication, so this setting has no failover, unlike aws_bedrock_regions. Default to the region this module is deployed in."
+  type        = string
+  default     = null
+}
+
+variable "tenant_api_keys" {
+  description = "If set, overrides whether the server validates tenant API keys, in place of deriving it from tenants being non-empty. Set to true to validate against a shared DynamoDB table populated outside this module, for example one named in aws_dynamodb_table; Terraform still only writes DynamoDB table items, and grants the sts:AssumeRole permission, for tenants actually declared here. It cannot be set to false while tenants declares any. Default to none, meaning tenants alone decides."
+  type        = bool
+  default     = null
+
+  # Turning the feature off is what stops the table being created, while the tenant records are
+  # written for every entry tenants declares: the combination would write each record into a table
+  # that does not exist, and the deployment would refuse the keys even if it did.
+  validation {
+    condition     = var.tenant_api_keys != false || length(var.tenants) == 0
+    error_message = "tenant_api_keys = false contradicts the tenants this deployment declares: their records have nowhere to be written and the server would reject the keys minted for them. Remove the tenants entries, or leave tenant_api_keys unset so it follows them."
+  }
+}
 
 variable "tenant_key_cache_seconds" {
-  description = "Seconds each server instance caches a tenant API key validation before re-reading the shared table. This is the revocation window: a key revoked, disabled or re-scoped in 'tenants' keeps its previous decision for up to this long per instance, traded against the table reads a shorter window costs. 0 reads the table on every request. Only applied when tenants is non-empty. Default to 60."
+  description = "Seconds each server instance caches a tenant API key validation before re-reading the shared table. This is the revocation window: a key revoked, disabled or re-scoped in 'tenants' keeps its previous decision for up to this long per instance, traded against the table reads a shorter window costs. 0 reads the table on every request. Only applied while tenant API keys are enabled. Default to 60."
   type        = number
   default     = null
 
@@ -775,6 +813,33 @@ variable "tenants" {
     ])
     error_message = "Each tenants aws_role_arn must be an IAM role ARN of the tenant's own AWS account, 'arn:aws:iam::<account>:role/<name>'."
   }
+}
+
+variable "tenant_key_ssm_parameter_prefix" {
+  description = "SSM Parameter Store path prefix the server delivers each tenant's minted API key under, in place of the prefix this module derives from its own name. Only applied while tenant API keys are enabled; the task role's SSM and KMS delivery grants are scoped to it, so a custom prefix is never wider than the derived one. Default to '/<name-prefix>/tenant-keys'."
+  type        = string
+  default     = null
+}
+
+variable "tenant_key_ssm_kms_key_id" {
+  description = "ARN of the KMS key encrypting the SSM parameter tenant API keys are delivered through, in place of this deployment's own key. Only applied while tenant API keys are enabled; the task role's KMS delivery grant is scoped to it, and the key's own policy must additionally allow the task role kms:Encrypt, kms:GenerateDataKey and kms:Decrypt. Must be a key ARN, not a key id or an alias: an IAM policy resource takes nothing else. Default to this deployment's own KMS key."
+  type        = string
+  default     = null
+
+  validation {
+    # A key id or an alias name is a valid KMS key reference elsewhere -- the application accepts
+    # either -- but the task role's grant above is a Resource element of an IAM policy, which
+    # takes nothing shorter than a full ARN, and the alias form has one that resolves to a
+    # different key over time, which the grant must not silently follow.
+    condition     = var.tenant_key_ssm_kms_key_id == null || can(regex("^arn:aws(-[a-z]+)*:kms:[a-z0-9-]*:[0-9]{12}:key/[0-9a-fA-F-]{36}$", var.tenant_key_ssm_kms_key_id))
+    error_message = "tenant_key_ssm_kms_key_id must be a KMS key ARN, 'arn:aws:kms:<region>:<account>:key/<key-id>', not a bare key id or an alias ARN: the task role's grant above takes it as an IAM policy Resource, which accepts nothing shorter than a full ARN naming the key itself."
+  }
+}
+
+variable "tenant_aws_credentials" {
+  description = "If set, overrides whether the server reports tenant AWS credentials as enabled, in place of deriving it from any tenants entry declaring aws_role_arn. The sts:AssumeRole grant stays scoped to exactly the roles tenants actually declares: forcing this to true with none declared reports the feature as enabled with no role for it to assume. Default to none, meaning tenants alone decides."
+  type        = bool
+  default     = null
 }
 
 variable "timezone" {
@@ -1037,6 +1102,17 @@ variable "drop_unsupported_system_prompt" {
   description = "If true, system prompts are silently dropped when models don't support them. If false, an error is returned when a system prompt is passed to a model that doesn't support system prompts (e.g., mistral.mistral-7b models). Default: true for backward compatibility."
   type        = bool
   default     = null
+}
+
+variable "chat_completions_reasoning_field" {
+  description = "Field carrying a reasoning model's thinking text on '/v1/chat/completions', which the OpenAI API itself does not return, so vendors differ: 'reasoning_content' is the DeepSeek spelling most clients read, 'reasoning' is the one OpenRouter and vLLM use, and 'none' emits neither and keeps responses strictly OpenAI-shaped. Default to 'reasoning_content'."
+  type        = string
+  default     = null
+
+  validation {
+    condition     = var.chat_completions_reasoning_field == null || contains(["reasoning_content", "reasoning", "none"], coalesce(var.chat_completions_reasoning_field, "reasoning_content"))
+    error_message = "chat_completions_reasoning_field must be 'reasoning_content', 'reasoning' or 'none'."
+  }
 }
 
 variable "tokens_estimation" {
@@ -1732,6 +1808,11 @@ variable "realtime_webrtc_media_enabled" {
   type        = bool
   default     = false
 }
+variable "realtime_webrtc_enabled" {
+  description = "If set, overrides whether the Realtime API reports WebRTC as available to callers, in place of following realtime_webrtc_media_enabled. The infrastructure the media path needs -- the public task, the security group and network ACL rules, the pinned autoscaling capacity -- stays governed by realtime_webrtc_media_enabled alone, so setting this to true without it advertises WebRTC with no public address and no opened UDP ports: only callers already inside the VPC, reaching the task on its private address with realtime_webrtc_allow_private_candidates, can then connect. Default to none, meaning realtime_webrtc_media_enabled alone decides."
+  type        = bool
+  default     = null
+}
 variable "realtime_webrtc_stun_server" {
   description = "STUN server the server queries to discover the public address it advertises to WebRTC callers, as a STUN URI. Required behind the 1:1 NAT of a public ECS task; any public STUN server works and learns nothing but the deployment's public address."
   type        = string
@@ -1789,12 +1870,15 @@ variable "realtime_webrtc_ingress_ipv6_cidrs" {
   default     = ["::/0"]
 }
 variable "realtime_webrtc_allow_private_candidates" {
-  description = "Accept the ICE candidates a WebRTC caller offers on addresses that are not globally routable: private (RFC 1918), shared (RFC 6598), loopback and link-local ones. They are dropped by default and an offer left with no candidate at all is refused, which is what keeps a caller holding nothing but an ephemeral client secret from aiming the task's UDP connectivity checks at addresses inside the deployment's own VPC. Enable it only where the callers legitimately share that network, such as a same-VPC or on-premises deployment. Hostname and mDNS ('.local') candidates are dropped either way: resolving one is itself a lookup on the deployment's network. Requires realtime_webrtc_media_enabled. Default to the application default (false)."
+  description = "Accept the ICE candidates a WebRTC caller offers on addresses that are not globally routable: private (RFC 1918), shared (RFC 6598), loopback and link-local ones. They are dropped by default and an offer left with no candidate at all is refused, which is what keeps a caller holding nothing but an ephemeral client secret from aiming the task's UDP connectivity checks at addresses inside the deployment's own VPC. Enable it only where the callers legitimately share that network, such as a same-VPC or on-premises deployment -- including one where realtime_webrtc_enabled reports WebRTC available with realtime_webrtc_media_enabled off, because every caller already reaches the task on its private address. Hostname and mDNS ('.local') candidates are dropped either way: resolving one is itself a lookup on the deployment's network. Requires realtime_webrtc_enabled, which follows realtime_webrtc_media_enabled unless overridden. Default to the application default (false)."
   type        = bool
   default     = null
 
   validation {
-    condition     = var.realtime_webrtc_allow_private_candidates != true || var.realtime_webrtc_media_enabled
-    error_message = "realtime_webrtc_allow_private_candidates requires realtime_webrtc_media_enabled: with no WebRTC media path there is no offer to screen, and the server refuses the combination at startup."
+    # realtime_webrtc_enabled overrides realtime_webrtc_media_enabled for the server's own gate on
+    # this setting (see server.tf), so this mirrors that same fallback rather than testing
+    # realtime_webrtc_media_enabled alone.
+    condition     = var.realtime_webrtc_allow_private_candidates != true || coalesce(var.realtime_webrtc_enabled, var.realtime_webrtc_media_enabled)
+    error_message = "realtime_webrtc_allow_private_candidates requires realtime_webrtc_enabled: with WebRTC not reported as available there is no offer to screen, and the server refuses the combination at startup. realtime_webrtc_enabled follows realtime_webrtc_media_enabled unless set explicitly."
   }
 }

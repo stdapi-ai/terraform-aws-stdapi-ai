@@ -16,13 +16,35 @@ it to the tenant, then delete the parameter.
 locals {
   tenant_keys_enabled = length(var.tenants) > 0
 
-  # One prefix per deployment: the IAM grant below and the server's delivery writes are both
-  # scoped to it, so two deployments in one account can never read each other's tenant keys.
-  tenant_key_ssm_parameter_prefix = local.tenant_keys_enabled ? "/${local.name_prefix}/tenant-keys" : null
+  # The reported TENANT_API_KEYS setting alone: tenant_api_keys lets an operator report the
+  # feature as enabled or disabled independently of tenants, for example when tenant records are
+  # written to the shared table by something other than this module. The DynamoDB table items
+  # below, and the SSM/KMS delivery grants further down, stay scoped to tenants regardless.
+  tenant_api_keys_enabled = var.tenant_api_keys != null ? var.tenant_api_keys : local.tenant_keys_enabled
 
-  # Cross-account roles the tenants declared: enabling the feature and the sts:AssumeRole
-  # grant both derive from them, so the IAM statement covers exactly the declared roles.
+  # One prefix per deployment: the IAM grant below and the server's delivery writes are both
+  # scoped to it, so two deployments in one account can never read each other's tenant keys. This
+  # follows tenant_api_keys_enabled rather than tenants being non-empty: the prefix and the grant
+  # it feeds must exist whenever the server validates tenant keys, whether or not Terraform
+  # declared any tenant itself. tenant_key_ssm_parameter_prefix overrides the derived default;
+  # both flow into the same IAM grant, so a custom prefix is never wider than the one this module
+  # derives.
+  tenant_key_ssm_parameter_prefix = local.tenant_api_keys_enabled ? coalesce(var.tenant_key_ssm_parameter_prefix, "/${local.name_prefix}/tenant-keys") : null
+
+  # KMS key encrypting the SSM parameters tenant keys are delivered through: this deployment's
+  # own key by default, or one supplied through tenant_key_ssm_kms_key_id. Computed unconditionally
+  # since it is only ever read behind tenant_api_keys_enabled elsewhere.
+  tenant_key_ssm_kms_key_arn = coalesce(var.tenant_key_ssm_kms_key_id, module.kms_key.arn)
+
+  # Cross-account roles the tenants declared: the sts:AssumeRole grant derives from them, so the
+  # IAM statement covers exactly the declared roles regardless of tenant_aws_credentials below.
   tenant_role_arns = distinct(compact([for _, tenant in var.tenants : tenant.aws_role_arn]))
+
+  # The reported TENANT_AWS_CREDENTIALS setting alone: tenant_aws_credentials lets an operator
+  # report the feature as enabled or disabled independently of tenants. The sts:AssumeRole grant
+  # in server.tf stays scoped to the roles tenants actually declares: there is no ARN to grant
+  # against otherwise.
+  tenant_aws_credentials_enabled = var.tenant_aws_credentials != null ? var.tenant_aws_credentials : length(local.tenant_role_arns) > 0
 
   # A guardrail can also arrive on a model alias, which the server refuses exactly as it refuses the
   # deployment-wide one. An alias is either a model ID or an object configuring the request, and

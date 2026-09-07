@@ -1,4 +1,11 @@
 locals {
+  # The reported REALTIME_WEBRTC_ENABLED setting alone: realtime_webrtc_enabled lets an operator
+  # report WebRTC availability independently of realtime_webrtc_media_enabled. Every resource
+  # below -- the public task, the security group and NACL rules, the pinned autoscaling capacity
+  # -- stays governed by realtime_webrtc_media_enabled alone, which is what actually provisions
+  # the media path.
+  realtime_webrtc_enabled = var.realtime_webrtc_enabled != null ? var.realtime_webrtc_enabled : var.realtime_webrtc_media_enabled
+
   # The mode dictates all three of these, and the module knows it, so it sets them rather than
   # failing the plan and asking the operator to type back what it already worked out. An explicit
   # value still wins, and the preconditions below reject one that contradicts the mode.
@@ -52,6 +59,18 @@ locals {
   realtime_webrtc_nacl_egress = {
     for name, flow in local.realtime_webrtc_out_of_band_egress :
     name => { from_port = flow.port, protocol = flow.protocol }
+  }
+}
+
+# realtime_webrtc_enabled = true without realtime_webrtc_media_enabled is a deliberate-but-unusual
+# shape, not a mistake to refuse outright: a VPC-internal deployment where every caller is already
+# inside the VPC and reaches the task on its private address, via realtime_webrtc_allow_private_candidates,
+# needs no public task and no opened UDP port. A warning rather than an error, since the module
+# cannot tell that shape apart from an operator who forgot the media mode.
+check "realtime_webrtc_enabled_without_media" {
+  assert {
+    condition     = !(var.realtime_webrtc_enabled == true && !var.realtime_webrtc_media_enabled)
+    error_message = "realtime_webrtc_enabled = true is set without realtime_webrtc_media_enabled, so the Realtime API advertises WebRTC on a task with no public address and no opened UDP ports. Only callers already inside the VPC, using realtime_webrtc_allow_private_candidates to reach the task on its private address, will be able to connect. Set realtime_webrtc_media_enabled to give the task a public address and open the media port range, or leave realtime_webrtc_enabled unset if that was not the intent."
   }
 }
 
