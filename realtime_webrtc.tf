@@ -195,7 +195,11 @@ resource "aws_vpc_security_group_egress_rule" "realtime_webrtc_out_of_band_ipv4"
 }
 
 resource "aws_vpc_security_group_egress_rule" "realtime_webrtc_out_of_band_ipv6" {
-  for_each          = module.vpc.ipv6_enabled ? local.realtime_webrtc_out_of_band_egress : {}
+  # The media flag is tested first, as in the ingress rules above: on operator-supplied subnets
+  # ipv6_enabled is read from the subnets themselves and is unknown until apply, and a for_each
+  # whose condition is unknown fails the plan outright -- even here, where the map is empty
+  # because the media path is off. Testing the static flag first keeps that condition known.
+  for_each          = var.realtime_webrtc_media_enabled && module.vpc.ipv6_enabled ? local.realtime_webrtc_out_of_band_egress : {}
   security_group_id = module.server.security_group_id
   description       = each.key
   ip_protocol       = each.value.protocol
