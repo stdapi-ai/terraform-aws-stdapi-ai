@@ -1562,13 +1562,13 @@ variable "dns_firewall_priority" {
 # ECS Container Configuration
 
 variable "cpu" {
-  description = "ECS task CPU count. Valid values: 0.25, 0.5, 1, 2, 4, 8 & 16. Default of 0.25 vCPU is suitable for common use cases (text generation, embeddings). Increase for intensive workloads (multimodal requests, large LLM models)."
+  description = "ECS task CPU count. Valid values: 0.25, 0.5, 1, 2, 4, 8 & 16. Paired with var.memory: each CPU value constrains which memory values Fargate accepts, see the ECS documentation. Default of 0.25 vCPU is suitable for common use cases (text generation, embeddings). Increase for intensive workloads (multimodal requests, large LLM models)."
   type        = number
   default     = 0.25
 }
 
 variable "memory" {
-  description = "ECS task memory (MiB). Valid values depend on the var.cpu value, see the ECS documentation. The default of 512 MiB covers text generation and embeddings, where the task holds little more than the request in flight. It is not enough for the paths that hold bytes in memory: audio and video through the ffmpeg pipeline, inline input files up to max_input_file_size, and max_concurrent_input_downloads of them fetched at once. Raise it to 1024 or beyond before using those, or the task is OOM-killed under load rather than answering slowly."
+  description = "ECS task memory (MiB). Valid values depend on the var.cpu value, see the ECS documentation. The default of 512 MiB covers text generation and embeddings, where the task holds little more than the request in flight. It is not enough for the paths that hold bytes in memory: audio and video through the ffmpeg pipeline, inline input files up to max_input_file_size, and max_concurrent_input_downloads of them fetched at once. Raise it to 1024 or beyond before using those, or the task is OOM-killed under load rather than answering slowly — which surfaces to callers as a 502 or 504 from the load balancer, not as an error from stdapi.ai."
   type        = number
   default     = 512
 }
