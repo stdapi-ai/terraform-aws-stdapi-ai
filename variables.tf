@@ -18,10 +18,9 @@ variable "name_prefix" {
     error_message = "Must be 22 characters or less: the VPC flow log IAM role name repeats the region and caps at IAM's 64 characters."
   }
 
-  validation {
-    condition     = !var.alb_enabled || length(var.name_prefix) <= 13
-    error_message = "Must be 13 characters or less when alb_enabled is true: the load balancer and its target group cap at 32 characters."
-  }
+  # The 13-character bound that alb_enabled imposes is a precondition on the load balancer itself
+  # (alb.tf): asserting it here would make this variable depend on var.alb_enabled, and through it
+  # on var.subnet_ids, which cycles for a caller that names its VPC from the name_prefix output.
 }
 
 variable "tags" {

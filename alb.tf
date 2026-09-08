@@ -190,6 +190,16 @@ resource "aws_lb" "main" {
       condition     = !var.alb_public || local.authentication_configured
       error_message = "alb_public = true requires an authentication method: set api_key_create = true, or one of api_key / api_key_ssm_parameter / api_key_secretsmanager_secret, or aws_cognito_user_pool_id, or declare tenants. Without one the server accepts every request that reaches it, and this load balancer puts it on the internet."
     }
+
+    # Checked here rather than on var.name_prefix: a validation there would make that variable
+    # depend on var.alb_enabled, which depends on var.subnet_ids, and a caller that names its own
+    # VPC from this module's name_prefix output while passing that VPC's subnets back closes the
+    # loop into a plan-time cycle. This resource exists only when the load balancer does, so the
+    # bound applies exactly where it binds, and still at plan time.
+    precondition {
+      condition     = length(var.name_prefix) <= 13
+      error_message = "name_prefix must be 13 characters or less when alb_enabled is true: the load balancer and its target group cap at 32 characters."
+    }
   }
 }
 
