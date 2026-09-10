@@ -558,6 +558,33 @@ variable "aws_bedrock_guardrail_trace" {
   }
 }
 
+variable "aws_bedrock_guardrail_checks_prompt_attack" {
+  description = "Detect prompt attacks (jailbreaks, prompt injection, prompt leakage) on the Moderations API when it classifies with inline Amazon Bedrock guardrail checks. Billed as a check of its own."
+  type        = bool
+  default     = null
+}
+
+variable "aws_bedrock_guardrail_checks_pii_entities" {
+  description = "PII entity types to detect on the Moderations API when it classifies with inline Amazon Bedrock guardrail checks, for instance [\"EMAIL\", \"PHONE\"]. Billed as a check of its own. Empty or null detects none. Broad types such as ADDRESS, NAME and URL match ordinary prose."
+  type        = list(string)
+  default     = null
+  validation {
+    condition = var.aws_bedrock_guardrail_checks_pii_entities == null || alltrue([
+      for entity in coalesce(var.aws_bedrock_guardrail_checks_pii_entities, []) : contains([
+        "ADDRESS", "AGE", "AWS_ACCESS_KEY", "AWS_SECRET_KEY", "CA_HEALTH_NUMBER",
+        "CA_SOCIAL_INSURANCE_NUMBER", "CREDIT_DEBIT_CARD_CVV", "CREDIT_DEBIT_CARD_EXPIRY",
+        "CREDIT_DEBIT_CARD_NUMBER", "DRIVER_ID", "EMAIL", "INTERNATIONAL_BANK_ACCOUNT_NUMBER",
+        "IP_ADDRESS", "LICENSE_PLATE", "MAC_ADDRESS", "NAME", "PASSWORD", "PHONE", "PIN",
+        "SWIFT_CODE", "UK_NATIONAL_HEALTH_SERVICE_NUMBER", "UK_NATIONAL_INSURANCE_NUMBER",
+        "UK_UNIQUE_TAXPAYER_REFERENCE_NUMBER", "URL", "USERNAME", "US_BANK_ACCOUNT_NUMBER",
+        "US_BANK_ROUTING_NUMBER", "US_INDIVIDUAL_TAX_IDENTIFICATION_NUMBER",
+        "US_PASSPORT_NUMBER", "US_SOCIAL_SECURITY_NUMBER", "VEHICLE_IDENTIFICATION_NUMBER",
+      ], entity)
+    ])
+    error_message = "Must contain only PII entity types the inline guardrail sensitive information check defines."
+  }
+}
+
 variable "aws_transcribe_region" {
   description = "AWS region for Transcribe speech-to-text service. Default to every var.aws_bedrock_regions region as a failover candidate, or the current region."
   type        = string
