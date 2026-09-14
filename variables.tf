@@ -558,6 +558,16 @@ variable "aws_bedrock_guardrail_trace" {
   }
 }
 
+variable "aws_bedrock_guardrail_scope_turns" {
+  description = "Number of trailing user turns an Amazon Bedrock guardrail evaluates on the chat routes. Lowers the bill on long conversations by no longer evaluating the history the client replays, and lowers detection by the same amount. Defaults to null: the whole conversation is evaluated on every request."
+  type        = number
+  default     = null
+  validation {
+    condition     = var.aws_bedrock_guardrail_scope_turns == null || try(var.aws_bedrock_guardrail_scope_turns >= 1 && floor(var.aws_bedrock_guardrail_scope_turns) == var.aws_bedrock_guardrail_scope_turns, false)
+    error_message = "Must be a whole number of 1 or more, or null."
+  }
+}
+
 variable "aws_bedrock_guardrail_checks_prompt_attack" {
   description = "Detect prompt attacks (jailbreaks, prompt injection, prompt leakage) on the Moderations API when it classifies with inline Amazon Bedrock guardrail checks. Billed as a check of its own."
   type        = bool

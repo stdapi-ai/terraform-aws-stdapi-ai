@@ -78,6 +78,7 @@ module "server" {
           AWS_BEDROCK_GUARDRAIL_IDENTIFIER           = var.aws_bedrock_guardrail_identifier
           AWS_BEDROCK_GUARDRAIL_VERSION              = var.aws_bedrock_guardrail_version
           AWS_BEDROCK_GUARDRAIL_TRACE                = var.aws_bedrock_guardrail_trace
+          AWS_BEDROCK_GUARDRAIL_SCOPE_TURNS          = var.aws_bedrock_guardrail_scope_turns
           AWS_BEDROCK_GUARDRAIL_CHECKS_PROMPT_ATTACK = var.aws_bedrock_guardrail_checks_prompt_attack
           AWS_BEDROCK_GUARDRAIL_CHECKS_PII_ENTITIES  = var.aws_bedrock_guardrail_checks_pii_entities != null ? join(",", var.aws_bedrock_guardrail_checks_pii_entities) : null
           AWS_BEDROCK_SESSION_ENCRYPTION_KEY_ARN     = var.aws_bedrock_session_encryption_key_arn
