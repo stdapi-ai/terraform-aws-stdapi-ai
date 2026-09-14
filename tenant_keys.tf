@@ -8,9 +8,12 @@ Terraform owns.
 The key secret is deliberately not created here. Terraform state is plaintext, shows in plan
 output, and gets committed, shared and backed up — a bearer credential must never land in it.
 The server mints the secret for every declared tenant, records only a salted hash in the
-table, and delivers the full key once through an SSM SecureString parameter under
-local.tenant_key_ssm_parameter_prefix (see the tenant_keys module output). Retrieve it, hand
-it to the tenant, then delete the parameter.
+table, and publishes the full key one of two ways (see the tenant_keys module output): by
+default once, through an SSM SecureString parameter under local.tenant_key_ssm_parameter_prefix
+— retrieve it, hand it to the tenant, then delete the parameter — or, once a rotation is asked
+for, durably, as the current version of an AWS Secrets Manager secret this module creates per
+tenant. The module owns that secret's container (its name, encryption key, tags and lifecycle);
+the server owns its versions, and a rotation moves the AWSCURRENT label onto the new one.
 */
 
 locals {
@@ -22,14 +25,25 @@ locals {
   # below, and the SSM/KMS delivery grants further down, stay scoped to tenants regardless.
   tenant_api_keys_enabled = var.tenant_api_keys != null ? var.tenant_api_keys : local.tenant_keys_enabled
 
+  # The Secrets Manager store is selected by either way of asking for a rotation, since both need
+  # a place to publish the new key that Parameter Store's one-shot delivery is not. Derived rather
+  # than a variable of its own: an operator asking for a rotation has already made the decision.
+  tenant_key_secretsmanager_enabled = local.tenant_api_keys_enabled && (var.tenant_key_rotation_days != null || anytrue([for _, tenant in var.tenants : tenant.key_generation != null]))
+
+  # One prefix per deployment, derived from the module's own name so two deployments in one
+  # account can never read each other's tenant keys; the IAM grant and the server's writes are
+  # both scoped to it.
+  tenant_key_secretsmanager_prefix = local.tenant_key_secretsmanager_enabled ? "${local.name_prefix}/tenant-keys" : null
+
   # One prefix per deployment: the IAM grant below and the server's delivery writes are both
   # scoped to it, so two deployments in one account can never read each other's tenant keys. This
   # follows tenant_api_keys_enabled rather than tenants being non-empty: the prefix and the grant
   # it feeds must exist whenever the server validates tenant keys, whether or not Terraform
   # declared any tenant itself. tenant_key_ssm_parameter_prefix overrides the derived default;
   # both flow into the same IAM grant, so a custom prefix is never wider than the one this module
-  # derives.
-  tenant_key_ssm_parameter_prefix = local.tenant_api_keys_enabled ? coalesce(var.tenant_key_ssm_parameter_prefix, "/${local.name_prefix}/tenant-keys") : null
+  # derives. Null while the Secrets Manager store is selected: nothing is delivered through
+  # Parameter Store then, so neither the setting nor the grant exists.
+  tenant_key_ssm_parameter_prefix = local.tenant_api_keys_enabled && !local.tenant_key_secretsmanager_enabled ? coalesce(var.tenant_key_ssm_parameter_prefix, "/${local.name_prefix}/tenant-keys") : null
 
   # KMS key encrypting the SSM parameters tenant keys are delivered through: this deployment's
   # own key by default, or one supplied through tenant_key_ssm_kms_key_id. Computed unconditionally
@@ -65,12 +79,26 @@ resource "random_string" "tenant_key_id" {
   special = false
 }
 
+# The container of a tenant's stored key: tagged, on this deployment's key, destroyed with the
+# tenant. The server writes every version into it and never deletes it. Created before the
+# tenant record below, so the server -- which mints within a minute of the record appearing --
+# never races this resource into an "already exists" failure by creating the secret itself.
+resource "aws_secretsmanager_secret" "tenant_key" {
+  for_each = local.tenant_key_secretsmanager_enabled ? var.tenants : {}
+
+  name        = "${local.tenant_key_secretsmanager_prefix}/${random_string.tenant_key_id[each.key].result}"
+  description = "stdapi.ai API key of tenant '${each.key}'"
+  kms_key_id  = module.kms_key.arn
+  tags        = local.tags
+}
+
 resource "aws_dynamodb_table_item" "tenant" {
   for_each = var.tenants
 
   # The table name is composed rather than read from the resource (see dynamodb.tf), so the
-  # ordering the reference used to carry has to be declared.
-  depends_on = [aws_dynamodb_table.main]
+  # ordering the reference used to carry has to be declared. The secret must exist before the
+  # record does, for the reason given on the resource.
+  depends_on = [aws_dynamodb_table.main, aws_secretsmanager_secret.tenant_key]
 
   region     = local.dynamodb_region
   table_name = local.dynamodb_table_name
@@ -101,6 +129,9 @@ resource "aws_dynamodb_table_item" "tenant" {
     },
     each.value.aws_role_arn == null ? {} : {
       aws_role_arn = { S = each.value.aws_role_arn }
+    },
+    each.value.key_generation == null ? {} : {
+      key_generation = { N = tostring(each.value.key_generation) }
     },
   ))
 

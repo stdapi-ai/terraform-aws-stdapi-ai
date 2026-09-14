@@ -111,7 +111,11 @@ module "server" {
           REALTIME_WEBRTC_TURN_SERVER                = local.realtime_webrtc_enabled ? var.realtime_webrtc_turn_server : null
           REALTIME_WEBRTC_TURN_USERNAME              = local.realtime_webrtc_enabled ? var.realtime_webrtc_turn_username : null
           REALTIME_WEBRTC_ALLOW_PRIVATE_CANDIDATES   = local.realtime_webrtc_enabled ? var.realtime_webrtc_allow_private_candidates : null
-          TENANT_KEY_SSM_KMS_KEY_ID                  = local.tenant_api_keys_enabled ? local.tenant_key_ssm_kms_key_arn : null
+          TENANT_KEY_SSM_KMS_KEY_ID                  = local.tenant_key_ssm_parameter_prefix != null ? local.tenant_key_ssm_kms_key_arn : null
+          TENANT_KEY_SECRETSMANAGER_PREFIX           = local.tenant_key_secretsmanager_prefix
+          TENANT_KEY_SECRETSMANAGER_KMS_KEY_ID       = local.tenant_key_secretsmanager_enabled ? module.kms_key.arn : null
+          TENANT_KEY_ROTATION_DAYS                   = local.tenant_key_secretsmanager_enabled ? var.tenant_key_rotation_days : null
+          TENANT_KEY_ROTATION_OVERLAP_SECONDS        = local.tenant_key_secretsmanager_enabled ? var.tenant_key_rotation_overlap_seconds : null
           TIMEZONE                                   = var.timezone
           OPENAI_ROUTES_PREFIX                       = var.openai_routes_prefix
           ANTHROPIC_ROUTES_PREFIX                    = var.anthropic_routes_prefix
@@ -1061,11 +1065,12 @@ data "aws_iam_policy_document" "server_services" {
   # PutParameter writes each minted key exactly once (Overwrite=False); GetParameter is the
   # crash recovery that re-reads a delivered key whose hash was never recorded. Scoped to this
   # deployment's own prefix, so the role can never read another deployment's tenant keys. Follows
-  # tenant_api_keys_enabled rather than tenants being non-empty: the grant is scoped to the prefix
-  # itself, not to any individual tenant, so it exists whenever the server validates tenant keys
-  # and widens nothing when Terraform declares none.
+  # the prefix being derived -- tenant_api_keys_enabled without the Secrets Manager store --
+  # rather than tenants being non-empty: the grant is scoped to the prefix itself, not to any
+  # individual tenant, so it exists whenever the server delivers tenant keys this way and widens
+  # nothing when Terraform declares none.
   dynamic "statement" {
-    for_each = local.tenant_api_keys_enabled ? [1] : []
+    for_each = local.tenant_key_ssm_parameter_prefix != null ? [1] : []
     content {
       sid = "SsmTenantKeyDelivery"
       actions = [
@@ -1083,10 +1088,10 @@ data "aws_iam_policy_document" "server_services" {
   # Parameter Store encrypts a standard SecureString with kms:Encrypt and an advanced one
   # with kms:GenerateDataKey (the account's default parameter tier decides which), and reads
   # either back with kms:Decrypt. ViaService keeps the grant unusable outside Parameter Store.
-  # Follows tenant_api_keys_enabled rather than tenants being non-empty, for the same reason as
-  # the SSM statement above: the grant is scoped to the key itself, not to any individual tenant.
+  # Follows the SSM statement above, for the same reason: the grant is scoped to the key itself,
+  # not to any individual tenant.
   dynamic "statement" {
-    for_each = local.tenant_api_keys_enabled ? [1] : []
+    for_each = local.tenant_key_ssm_parameter_prefix != null ? [1] : []
     content {
       sid = "KMSTenantKeyDelivery"
       actions = [
@@ -1107,6 +1112,55 @@ data "aws_iam_policy_document" "server_services" {
         test     = "StringLike"
         variable = "kms:EncryptionContext:PARAMETER_ARN"
         values   = ["arn:${data.aws_partition.current.partition}:ssm:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:parameter${local.tenant_key_ssm_parameter_prefix}/*"]
+      }
+    }
+  }
+
+  # Secrets Manager - Tenant API key store and rotation (Optional)
+  # The server creates a tenant's secret when none exists (a deployment declaring tenants outside
+  # this module), writes each minted or rotated key as a version of it, reads a version back only
+  # to adopt a write another instance or a crashed pass made first, reads the label map to name
+  # the version AWSCURRENT leaves, and moves the label. It never deletes a secret and never tags
+  # one: the container's lifecycle and tags are this module's. Scoped to this deployment's own
+  # prefix; a secret's ARN ends with a random suffix, which the trailing wildcard matches.
+  dynamic "statement" {
+    for_each = local.tenant_key_secretsmanager_enabled ? [1] : []
+    content {
+      sid = "SecretsManagerTenantKeys"
+      actions = [
+        "secretsmanager:CreateSecret",
+        "secretsmanager:DescribeSecret",
+        "secretsmanager:GetSecretValue",
+        "secretsmanager:PutSecretValue",
+        "secretsmanager:UpdateSecretVersionStage",
+      ]
+      resources = ["arn:${data.aws_partition.current.partition}:secretsmanager:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:secret:${local.tenant_key_secretsmanager_prefix}/*"]
+    }
+  }
+
+  # KMS - Tenant API key store and rotation (Optional)
+  # The secrets are encrypted with this deployment's own key: Secrets Manager wraps a version
+  # with kms:GenerateDataKey and unwraps one with kms:Decrypt. ViaService keeps the grant unusable
+  # outside Secrets Manager, and the SecretARN encryption context narrows it to the tenant
+  # secrets rather than every secret the account encrypts under this key.
+  dynamic "statement" {
+    for_each = local.tenant_key_secretsmanager_enabled ? [1] : []
+    content {
+      sid = "KMSTenantKeySecrets"
+      actions = [
+        "kms:GenerateDataKey",
+        "kms:Decrypt",
+      ]
+      resources = [module.kms_key.arn]
+      condition {
+        test     = "StringEquals"
+        variable = "kms:ViaService"
+        values   = ["secretsmanager.${data.aws_region.current.region}.amazonaws.com"]
+      }
+      condition {
+        test     = "StringLike"
+        variable = "kms:EncryptionContext:SecretARN"
+        values   = ["arn:${data.aws_partition.current.partition}:secretsmanager:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:secret:${local.tenant_key_secretsmanager_prefix}/*"]
       }
     }
   }

@@ -167,11 +167,13 @@ output "subnet_ids" {
   value       = length(var.subnet_ids) > 1 ? var.subnet_ids : module.vpc.subnets_ids
 }
 output "tenant_keys" {
-  description = "Per tenant of var.tenants: the public key ID and the SSM SecureString parameter the server delivers the minted API key through, within a minute of starting or reconciling. Retrieve it once with 'aws ssm get-parameter --name <ssm_parameter> --with-decryption --query Parameter.Value --output text', hand it to the tenant, then delete the parameter -- the copy it holds is the only one, and it is the only thing between a reader of this deployment's KMS key and a working tenant credential. The SecureString is encrypted with that key, so retrieving it takes kms:Decrypt on it as well as ssm:GetParameter on the path. The key itself never enters Terraform state."
+  description = "Per tenant of var.tenants: the public key ID, and where the server publishes the minted API key within a minute of starting or reconciling. By default that is the SSM SecureString parameter it is delivered through once (ssm_parameter): retrieve it with 'aws ssm get-parameter --name <ssm_parameter> --with-decryption --query Parameter.Value --output text', hand it to the tenant, then delete the parameter -- the copy it holds is the only one, and it is the only thing between a reader of this deployment's KMS key and a working tenant credential. With tenant_key_rotation_days set, or a tenants entry declaring key_generation, it is instead the AWS Secrets Manager secret holding the key as its current version (secret_name, secret_arn): read it with 'aws secretsmanager get-secret-value --secret-id <secret_name> --query SecretString --output text', and again after a rotation, when the superseded key is the AWSPREVIOUS version; grant the tenant secretsmanager:GetSecretValue on secret_arn, and kms:Decrypt on this deployment's KMS key through Secrets Manager, to let it re-read its own key. Whichever is not in use is null. Both are encrypted with that key, so reading either takes kms:Decrypt on it as well as the read permission itself. The key itself never enters Terraform state."
   value = {
     for name in keys(var.tenants) : name => {
       key_id        = random_string.tenant_key_id[name].result
-      ssm_parameter = "${local.tenant_key_ssm_parameter_prefix}/${random_string.tenant_key_id[name].result}"
+      ssm_parameter = local.tenant_key_ssm_parameter_prefix == null ? null : "${local.tenant_key_ssm_parameter_prefix}/${random_string.tenant_key_id[name].result}"
+      secret_name   = local.tenant_key_secretsmanager_enabled ? aws_secretsmanager_secret.tenant_key[name].name : null
+      secret_arn    = local.tenant_key_secretsmanager_enabled ? aws_secretsmanager_secret.tenant_key[name].arn : null
     }
   }
 }

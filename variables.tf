@@ -829,12 +829,13 @@ variable "tenants" {
   description = <<-EOT
     Per-tenant API keys, one entry per tenant keyed by the tenant's name. Terraform owns each tenant's record — identity, scopes, the disabled flag, the optional role — in the shared DynamoDB table this module creates for the first tenant declared, and never owns the key secret itself. Default to no tenants, which leaves tenant API keys disabled.
 
-    Fields, all optional: "models_allow" and "models_deny" scope the models the tenant may name; "endpoints_allow" and "endpoints_deny" scope the routes, as glob patterns against route path templates such as '/v1/chat/completions'; "disabled" suspends the tenant's keys without deleting the record; "aws_role_arn" is an IAM role of the tenant's own AWS account its model invocations then run under, on the tenant's own Amazon Bedrock quota and bill. An absent list restricts nothing; an empty list allows nothing; deny wins over allow.
+    Fields, all optional: "models_allow" and "models_deny" scope the models the tenant may name; "endpoints_allow" and "endpoints_deny" scope the routes, as glob patterns against route path templates such as '/v1/chat/completions'; "disabled" suspends the tenant's keys without deleting the record; "aws_role_arn" is an IAM role of the tenant's own AWS account its model invocations then run under, on the tenant's own Amazon Bedrock quota and bill; "key_generation" rotates the tenant's key on demand. An absent list restricts nothing; an empty list allows nothing; deny wins over allow.
 
     Example: {
       "acme" = {
         models_allow   = ["anthropic.claude-*"]
         endpoints_deny = ["/v1/images/*"]
+        key_generation = 2
       }
       "globex" = {
         aws_role_arn = "arn:aws:iam::123456789012:role/globex-stdapi"
@@ -842,6 +843,8 @@ variable "tenants" {
     }
 
     The key secret never enters Terraform state: the server mints it and delivers it once through the SSM parameter named in the tenant_keys output. That parameter is a SecureString encrypted with this deployment's own KMS key, so reading the key also takes kms:Decrypt on that key and not merely ssm:GetParameter on the path: retrieve it and delete it as soon as it appears.
+
+    Declaring 'key_generation' on any tenant, like setting tenant_key_rotation_days, stores every tenant's key in an AWS Secrets Manager secret of its own instead (named in the tenant_keys output, on this deployment's KMS key), which is where a rotated key is published: the server rotates the tenant's key once whenever the value exceeds the generation it recorded at the previous rotation, so raising it -- 1, then 2, then 3 -- is a declarative, idempotent request for one rotation. The superseded key keeps working for tenant_key_rotation_overlap_seconds.
 
     Declaring 'aws_role_arn' enables tenant AWS credentials on the server, grants the task role 'sts:AssumeRole' on exactly the declared roles, and cannot be combined with Amazon Bedrock Guardrails; the tenant must condition its role's trust policy on the ExternalId the server mints, read from the tenant's 'secret#<key id>' record.
   EOT
@@ -852,6 +855,7 @@ variable "tenants" {
     endpoints_deny  = optional(list(string))
     disabled        = optional(bool, false)
     aws_role_arn    = optional(string)
+    key_generation  = optional(number)
   }))
   default = {}
 
@@ -863,20 +867,50 @@ variable "tenants" {
   validation {
     condition = alltrue([
       for _, tenant in var.tenants :
+      tenant.key_generation == null || try(tenant.key_generation >= 1 && floor(tenant.key_generation) == tenant.key_generation, false)
+    ])
+    error_message = "Each tenants key_generation is a whole number of at least 1: the server rotates the key whenever it exceeds the generation recorded at the previous rotation."
+  }
+
+  validation {
+    condition = alltrue([
+      for _, tenant in var.tenants :
       tenant.aws_role_arn == null || can(regex("^arn:aws(-[a-z]+)*:iam::[0-9]{12}:role/", tenant.aws_role_arn))
     ])
     error_message = "Each tenants aws_role_arn must be an IAM role ARN of the tenant's own AWS account, 'arn:aws:iam::<account>:role/<name>'."
   }
 }
 
+variable "tenant_key_rotation_days" {
+  description = "Rotate every tenant API key once it is this many days old, counted from its mint or its last rotation. Setting it stores the tenant keys in AWS Secrets Manager -- one secret per tenant, named in the tenant_keys output, encrypted with this deployment's own KMS key -- instead of delivering each key once through SSM Parameter Store: a rotated key becomes its secret's current version (AWSCURRENT), the superseded one stays readable as AWSPREVIOUS and keeps working for tenant_key_rotation_overlap_seconds, and a tenant granted secretsmanager:GetSecretValue on its own secret re-reads its key without an operator in the loop. 90 or less keeps the secrets within the periodic-rotation window AWS Security Hub checks. Only applied while tenant API keys are enabled. Default to none: keys are delivered once through Parameter Store and only rotated on demand, through a tenants entry's key_generation."
+  type        = number
+  default     = null
+
+  validation {
+    condition     = var.tenant_key_rotation_days == null || try(var.tenant_key_rotation_days >= 1 && floor(var.tenant_key_rotation_days) == var.tenant_key_rotation_days, false)
+    error_message = "tenant_key_rotation_days is a whole number of days, at least 1."
+  }
+}
+
+variable "tenant_key_rotation_overlap_seconds" {
+  description = "Seconds a rotated tenant API key keeps working after its replacement was stored, so a client that has not re-read its secret yet is not locked out; 0 refuses the superseded key as soon as the new one is stored. A compromised key is revoked at once, whatever this value, by setting disabled on its tenants entry. Only applied while tenant keys are stored in AWS Secrets Manager, that is with tenant_key_rotation_days set or a tenants entry declaring key_generation. Default to the server's own default of 604800 (7 days)."
+  type        = number
+  default     = null
+
+  validation {
+    condition     = var.tenant_key_rotation_overlap_seconds == null || try(var.tenant_key_rotation_overlap_seconds >= 0, false)
+    error_message = "tenant_key_rotation_overlap_seconds cannot be negative: it is a number of seconds."
+  }
+}
+
 variable "tenant_key_ssm_parameter_prefix" {
-  description = "SSM Parameter Store path prefix the server delivers each tenant's minted API key under, in place of the prefix this module derives from its own name. Only applied while tenant API keys are enabled; the task role's SSM and KMS delivery grants are scoped to it, so a custom prefix is never wider than the derived one. Default to '/<name-prefix>/tenant-keys'."
+  description = "SSM Parameter Store path prefix the server delivers each tenant's minted API key under, in place of the prefix this module derives from its own name. Only applied while tenant API keys are enabled and delivered through Parameter Store, that is without tenant_key_rotation_days or a tenants entry declaring key_generation; the task role's SSM and KMS delivery grants are scoped to it, so a custom prefix is never wider than the derived one. Default to '/<name-prefix>/tenant-keys'."
   type        = string
   default     = null
 }
 
 variable "tenant_key_ssm_kms_key_id" {
-  description = "ARN of the KMS key encrypting the SSM parameter tenant API keys are delivered through, in place of this deployment's own key. Only applied while tenant API keys are enabled; the task role's KMS delivery grant is scoped to it, and the key's own policy must additionally allow the task role kms:Encrypt, kms:GenerateDataKey and kms:Decrypt. Must be a key ARN, not a key id or an alias: an IAM policy resource takes nothing else. Default to this deployment's own KMS key."
+  description = "ARN of the KMS key encrypting the SSM parameter tenant API keys are delivered through, in place of this deployment's own key. Only applied while tenant API keys are enabled and delivered through Parameter Store, that is without tenant_key_rotation_days or a tenants entry declaring key_generation; the task role's KMS delivery grant is scoped to it, and the key's own policy must additionally allow the task role kms:Encrypt, kms:GenerateDataKey and kms:Decrypt. Must be a key ARN, not a key id or an alias: an IAM policy resource takes nothing else. Default to this deployment's own KMS key."
   type        = string
   default     = null
 
