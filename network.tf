@@ -26,8 +26,8 @@ locals {
   translate_in_current_region  = contains(local.translate_regions, local.current_region)
   bedrock_in_current_region    = contains(local.candidate_regions, local.current_region)
 
-  # Check if Secrets Manager is needed for API key authentication
-  secretsmanager_needed = var.api_key_secretsmanager_secret != null
+  # Check if Secrets Manager is needed, for API key authentication or the tenant key store
+  secretsmanager_needed = var.api_key_secretsmanager_secret != null || local.tenant_key_secretsmanager_enabled
 
   # The vector store indexing queue is reached in the single region its URL names, with no
   # failover, and only when durable indexing is enabled.
