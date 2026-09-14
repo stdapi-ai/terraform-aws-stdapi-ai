@@ -105,6 +105,8 @@ module "server" {
           TENANT_API_KEYS                            = local.tenant_api_keys_enabled ? true : null
           TENANT_KEY_SSM_PARAMETER_PREFIX            = local.tenant_key_ssm_parameter_prefix
           TENANT_KEY_CACHE_SECONDS                   = local.tenant_api_keys_enabled ? var.tenant_key_cache_seconds : null
+          TENANT_RATE_LIMIT_REQUESTS_PER_MINUTE      = local.tenant_api_keys_enabled ? var.tenant_rate_limit_requests_per_minute : null
+          TENANT_RATE_LIMIT_TOKENS_PER_MINUTE        = local.tenant_api_keys_enabled ? var.tenant_rate_limit_tokens_per_minute : null
           TENANT_AWS_CREDENTIALS                     = local.tenant_aws_credentials_enabled ? true : null
           REALTIME_WEBRTC_ENABLED                    = local.realtime_webrtc_enabled ? true : null
           REALTIME_WEBRTC_STUN_SERVER                = local.realtime_webrtc_enabled ? var.realtime_webrtc_stun_server : null
@@ -1041,10 +1043,11 @@ data "aws_iam_policy_document" "server_services" {
   }
 
   # DynamoDB - Shared Table (Optional)
-  # Scoped to the table itself, no index ARNs: the table has no GSI. UpdateItem, Scan and
-  # BatchGetItem are deliberately not granted — no code path calls them. When a customer
-  # managed key encrypts the table, DynamoDB uses grants it creates at table creation time to
-  # read and write, so no KMS permission is needed here.
+  # Scoped to the table itself, no index ARNs: the table has no GSI. Scan and BatchGetItem are
+  # deliberately not granted — no code path calls them — and UpdateItem is granted separately
+  # below, on the rate-limit counters alone. When a customer managed key encrypts the table,
+  # DynamoDB uses grants it creates at table creation time to read and write, so no KMS
+  # permission is needed here.
   dynamic "statement" {
     for_each = local.dynamodb_table_name != null ? [1] : []
     content {
@@ -1058,6 +1061,24 @@ data "aws_iam_policy_document" "server_services" {
         "dynamodb:DescribeTimeToLive",
       ]
       resources = [local.dynamodb_table_arn]
+    }
+  }
+
+  # DynamoDB - Tenant rate-limit counters (Optional)
+  # The one write-in-place action, confined to the counter items ('LIMIT#<key id>' partitions)
+  # so it can never rewrite a tenant record or the shared model list. Follows a limit being
+  # declared, by a deployment default or by a tenants entry.
+  dynamic "statement" {
+    for_each = local.tenant_rate_limits_enabled ? [1] : []
+    content {
+      sid       = "DynamoDBRateLimitCounters"
+      actions   = ["dynamodb:UpdateItem"]
+      resources = [local.dynamodb_table_arn]
+      condition {
+        test     = "ForAllValues:StringLike"
+        variable = "dynamodb:LeadingKeys"
+        values   = ["LIMIT#*"]
+      }
     }
   }
 

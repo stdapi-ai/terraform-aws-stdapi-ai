@@ -54,6 +54,14 @@ locals {
   # IAM statement covers exactly the declared roles regardless of tenant_aws_credentials below.
   tenant_role_arns = distinct(compact([for _, tenant in var.tenants : tenant.aws_role_arn]))
 
+  # Whether any tenant key is rate limited, by a deployment default or by its own entry: what
+  # makes the server count requests in the table, and so what the UpdateItem grant follows.
+  tenant_rate_limits_enabled = local.tenant_api_keys_enabled && (
+    var.tenant_rate_limit_requests_per_minute != null
+    || var.tenant_rate_limit_tokens_per_minute != null
+    || anytrue([for _, tenant in var.tenants : tenant.requests_per_minute != null || tenant.tokens_per_minute != null])
+  )
+
   # The reported TENANT_AWS_CREDENTIALS setting alone: tenant_aws_credentials lets an operator
   # report the feature as enabled or disabled independently of tenants. The sts:AssumeRole grant
   # in server.tf stays scoped to the roles tenants actually declares: there is no ARN to grant
@@ -132,6 +140,12 @@ resource "aws_dynamodb_table_item" "tenant" {
     },
     each.value.key_generation == null ? {} : {
       key_generation = { N = tostring(each.value.key_generation) }
+    },
+    each.value.requests_per_minute == null ? {} : {
+      requests_per_minute = { N = tostring(each.value.requests_per_minute) }
+    },
+    each.value.tokens_per_minute == null ? {} : {
+      tokens_per_minute = { N = tostring(each.value.tokens_per_minute) }
     },
   ))
 

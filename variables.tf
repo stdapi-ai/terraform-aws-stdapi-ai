@@ -829,13 +829,14 @@ variable "tenants" {
   description = <<-EOT
     Per-tenant API keys, one entry per tenant keyed by the tenant's name. Terraform owns each tenant's record — identity, scopes, the disabled flag, the optional role — in the shared DynamoDB table this module creates for the first tenant declared, and never owns the key secret itself. Default to no tenants, which leaves tenant API keys disabled.
 
-    Fields, all optional: "models_allow" and "models_deny" scope the models the tenant may name; "endpoints_allow" and "endpoints_deny" scope the routes, as glob patterns against route path templates such as '/v1/chat/completions'; "disabled" suspends the tenant's keys without deleting the record; "aws_role_arn" is an IAM role of the tenant's own AWS account its model invocations then run under, on the tenant's own Amazon Bedrock quota and bill; "key_generation" rotates the tenant's key on demand. An absent list restricts nothing; an empty list allows nothing; deny wins over allow.
+    Fields, all optional: "models_allow" and "models_deny" scope the models the tenant may name; "endpoints_allow" and "endpoints_deny" scope the routes, as glob patterns against route path templates such as '/v1/chat/completions'; "disabled" suspends the tenant's keys without deleting the record; "aws_role_arn" is an IAM role of the tenant's own AWS account its model invocations then run under, on the tenant's own Amazon Bedrock quota and bill; "key_generation" rotates the tenant's key on demand; "requests_per_minute" and "tokens_per_minute" cap what the tenant's key may do per minute, overriding tenant_rate_limit_requests_per_minute and tenant_rate_limit_tokens_per_minute for that tenant. An absent list restricts nothing; an empty list allows nothing; deny wins over allow.
 
     Example: {
       "acme" = {
-        models_allow   = ["anthropic.claude-*"]
-        endpoints_deny = ["/v1/images/*"]
-        key_generation = 2
+        models_allow        = ["anthropic.claude-*"]
+        endpoints_deny      = ["/v1/images/*"]
+        key_generation      = 2
+        requests_per_minute = 600
       }
       "globex" = {
         aws_role_arn = "arn:aws:iam::123456789012:role/globex-stdapi"
@@ -849,15 +850,33 @@ variable "tenants" {
     Declaring 'aws_role_arn' enables tenant AWS credentials on the server, grants the task role 'sts:AssumeRole' on exactly the declared roles, and cannot be combined with Amazon Bedrock Guardrails; the tenant must condition its role's trust policy on the ExternalId the server mints, read from the tenant's 'secret#<key id>' record.
   EOT
   type = map(object({
-    models_allow    = optional(list(string))
-    models_deny     = optional(list(string))
-    endpoints_allow = optional(list(string))
-    endpoints_deny  = optional(list(string))
-    disabled        = optional(bool, false)
-    aws_role_arn    = optional(string)
-    key_generation  = optional(number)
+    models_allow        = optional(list(string))
+    models_deny         = optional(list(string))
+    endpoints_allow     = optional(list(string))
+    endpoints_deny      = optional(list(string))
+    disabled            = optional(bool, false)
+    aws_role_arn        = optional(string)
+    key_generation      = optional(number)
+    requests_per_minute = optional(number)
+    tokens_per_minute   = optional(number)
   }))
   default = {}
+
+  validation {
+    condition = alltrue([
+      for _, tenant in var.tenants :
+      tenant.requests_per_minute == null || try(tenant.requests_per_minute >= 1 && floor(tenant.requests_per_minute) == tenant.requests_per_minute, false)
+    ])
+    error_message = "Each tenants requests_per_minute is a whole number of at least 1: the requests the tenant's key may make per minute."
+  }
+
+  validation {
+    condition = alltrue([
+      for _, tenant in var.tenants :
+      tenant.tokens_per_minute == null || try(tenant.tokens_per_minute >= 1 && floor(tenant.tokens_per_minute) == tenant.tokens_per_minute, false)
+    ])
+    error_message = "Each tenants tokens_per_minute is a whole number of at least 1: the tokens the tenant's key may bill per minute."
+  }
 
   validation {
     condition     = alltrue([for name, _ in var.tenants : can(regex("^[A-Za-z0-9_.-]{1,64}$", name))])
@@ -878,6 +897,28 @@ variable "tenants" {
       tenant.aws_role_arn == null || can(regex("^arn:aws(-[a-z]+)*:iam::[0-9]{12}:role/", tenant.aws_role_arn))
     ])
     error_message = "Each tenants aws_role_arn must be an IAM role ARN of the tenant's own AWS account, 'arn:aws:iam::<account>:role/<name>'."
+  }
+}
+
+variable "tenant_rate_limit_requests_per_minute" {
+  description = "Requests each tenant API key may make per minute, unless its tenants entry declares its own requests_per_minute. Minutes are fixed windows shared by every task through the DynamoDB table, and a request over the limit answers 429 with a retry-after naming the seconds left in the minute. Only tenant keys are limited; the deployment API key and Amazon Cognito tokens are not. Only applied while tenant API keys are enabled. Default to none: no request limit, except for the tenants entries that declare one."
+  type        = number
+  default     = null
+
+  validation {
+    condition     = var.tenant_rate_limit_requests_per_minute == null || try(var.tenant_rate_limit_requests_per_minute >= 1 && floor(var.tenant_rate_limit_requests_per_minute) == var.tenant_rate_limit_requests_per_minute, false)
+    error_message = "tenant_rate_limit_requests_per_minute is a whole number of requests per minute, at least 1."
+  }
+}
+
+variable "tenant_rate_limit_tokens_per_minute" {
+  description = "Tokens each tenant API key may bill per minute -- input, cache-write and output tokens; cached reads are free -- unless its tenants entry declares its own tokens_per_minute. A request is admitted on the key's recent average and reconciled from what the model actually billed, so a minute may exceed the limit by the requests in flight when it was reached; the next requests answer 429 until the minute ends. Only applied while tenant API keys are enabled. Default to none: no token limit, except for the tenants entries that declare one."
+  type        = number
+  default     = null
+
+  validation {
+    condition     = var.tenant_rate_limit_tokens_per_minute == null || try(var.tenant_rate_limit_tokens_per_minute >= 1 && floor(var.tenant_rate_limit_tokens_per_minute) == var.tenant_rate_limit_tokens_per_minute, false)
+    error_message = "tenant_rate_limit_tokens_per_minute is a whole number of tokens per minute, at least 1."
   }
 }
 
