@@ -845,7 +845,7 @@ variable "tenants" {
 
     The key secret never enters Terraform state: the server mints it and, unless a rotation is asked for (below), delivers it once through the SSM parameter named in the tenant_keys output. That parameter is a SecureString encrypted with this deployment's own KMS key, so reading the key also takes kms:Decrypt on that key and not merely ssm:GetParameter on the path: retrieve it and delete it as soon as it appears.
 
-    Declaring 'key_generation' on any tenant, like setting tenant_key_rotation_days, stores every tenant's key in an AWS Secrets Manager secret of its own instead (named in the tenant_keys output, on this deployment's KMS key), which is where a rotated key is published: the server rotates the tenant's key once whenever the value exceeds the generation it recorded at the previous rotation, so raising it -- 1, then 2, then 3 -- is a declarative, idempotent request for one rotation. The superseded key keeps working for tenant_key_rotation_overlap_seconds.
+    Declaring 'key_generation' on any tenant, like setting tenant_key_rotation_days, stores every tenant's key in an AWS Secrets Manager secret of its own instead (named in the tenant_keys output, on this deployment's KMS key), which is where a rotated key is published: the server rotates the tenant's key once whenever the value exceeds the generation it recorded at the previous rotation, so raising it -- 1, then 2, then 3 -- is a declarative, idempotent request for one rotation. The superseded key keeps working for tenant_key_rotation_overlap_seconds. Removing the last rotation trigger reverses the move: with tenant_key_rotation_days unset, clearing the one 'key_generation' a tenant still declares -- tidying away a value raised once and forgotten -- deselects the store, destroys every tenant's secret and reverts delivery to one-shot Parameter Store, so leave the value in place rather than removing it. Secrets Manager only schedules that deletion, with the recovery window and the --force-delete-without-recovery escape the README's destroy section describes.
 
     Declaring 'aws_role_arn' enables tenant AWS credentials on the server, grants the task role 'sts:AssumeRole' on exactly the declared roles, and cannot be combined with Amazon Bedrock Guardrails; the tenant must condition its role's trust policy on the ExternalId the server mints, read from the tenant's 'secret#<key id>' record.
   EOT
@@ -923,7 +923,7 @@ variable "tenant_rate_limit_tokens_per_minute" {
 }
 
 variable "tenant_key_rotation_days" {
-  description = "Rotate every tenant API key once it is this many days old, counted from its mint or its last rotation. Setting it stores the tenant keys in AWS Secrets Manager -- one secret per tenant, named in the tenant_keys output, encrypted with this deployment's own KMS key -- instead of delivering each key once through SSM Parameter Store: a rotated key becomes its secret's current version (AWSCURRENT), the superseded one stays readable as AWSPREVIOUS and keeps working for tenant_key_rotation_overlap_seconds, and a tenant granted secretsmanager:GetSecretValue on its own secret -- a principal of this deployment's own account, since the module writes no resource policy on the secret -- re-reads its key without an operator in the loop. 90 or less keeps the secrets within the periodic-rotation window AWS Security Hub checks. Only applied while tenant API keys are enabled. Default to none: keys are delivered once through Parameter Store and only rotated on demand, through a tenants entry's key_generation."
+  description = "Rotate every tenant API key once it is this many days old, counted from its mint or its last rotation. Setting it stores the tenant keys in AWS Secrets Manager -- one secret per tenant, named in the tenant_keys output, encrypted with this deployment's own KMS key -- instead of delivering each key once through SSM Parameter Store: a rotated key becomes its secret's current version (AWSCURRENT), the superseded one stays readable as AWSPREVIOUS and keeps working for tenant_key_rotation_overlap_seconds, and a tenant granted secretsmanager:GetSecretValue on its own secret -- a principal of this deployment's own account, since the module writes no resource policy on the secret -- re-reads its key without an operator in the loop. 90 or less keeps the secrets within the periodic-rotation window AWS Security Hub checks. Unsetting it again destroys every tenant's secret and reverts delivery to one-shot Parameter Store, unless a tenants entry still declares key_generation: the store is selected by these two triggers alone, and removing the last one takes it down with every key stored in it. Only applied while tenant API keys are enabled. Default to none: keys are delivered once through Parameter Store and only rotated on demand, through a tenants entry's key_generation."
   type        = number
   default     = null
 
@@ -934,13 +934,18 @@ variable "tenant_key_rotation_days" {
 }
 
 variable "tenant_key_rotation_overlap_seconds" {
-  description = "Seconds a rotated tenant API key keeps working after its replacement was stored, so a client that has not re-read its secret yet is not locked out; 0 refuses the superseded key as soon as the new one is stored. A compromised key is revoked at once, whatever this value, by setting disabled on its tenants entry. Only applied while tenant keys are stored in AWS Secrets Manager, that is with tenant_key_rotation_days set or a tenants entry declaring key_generation. Default to the server's own default of 604800 (7 days)."
+  description = "Seconds a rotated tenant API key keeps working after its replacement was stored, so a client that has not re-read its secret yet is not locked out; 0 refuses the superseded key as soon as the new one is stored. Only the last superseded key is kept, so the grace ends at the next rotation whatever this is set to, and it must be shorter than tenant_key_rotation_days. Setting disabled on its tenants entry refuses both keys within tenant_key_cache_seconds, whatever this value. Only applied while tenant keys are stored in AWS Secrets Manager, that is with tenant_key_rotation_days set or a tenants entry declaring key_generation. Default to the server's own default of 604800 (7 days)."
   type        = number
   default     = null
 
   validation {
-    condition     = var.tenant_key_rotation_overlap_seconds == null || try(var.tenant_key_rotation_overlap_seconds >= 0, false)
-    error_message = "tenant_key_rotation_overlap_seconds cannot be negative: it is a number of seconds."
+    condition     = var.tenant_key_rotation_overlap_seconds == null || try(var.tenant_key_rotation_overlap_seconds >= 0 && floor(var.tenant_key_rotation_overlap_seconds) == var.tenant_key_rotation_overlap_seconds, false)
+    error_message = "tenant_key_rotation_overlap_seconds is a whole number of seconds, and cannot be negative."
+  }
+
+  validation {
+    condition     = var.tenant_key_rotation_overlap_seconds == null || var.tenant_key_rotation_days == null || try(var.tenant_key_rotation_overlap_seconds < var.tenant_key_rotation_days * 86400, false)
+    error_message = "tenant_key_rotation_overlap_seconds must be shorter than tenant_key_rotation_days: only the last superseded key is kept, so an overlap reaching the next rotation retires nothing. The server refuses this pairing at startup."
   }
 }
 
