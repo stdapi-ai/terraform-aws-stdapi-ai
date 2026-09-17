@@ -827,7 +827,7 @@ variable "tenant_key_cache_seconds" {
 
 variable "tenants" {
   description = <<-EOT
-    Per-tenant API keys, one entry per tenant keyed by the tenant's name. Terraform owns each tenant's record — identity, scopes, the disabled flag, the optional role — in the shared DynamoDB table this module creates for the first tenant declared, and never owns the key secret itself. Default to no tenants, which leaves tenant API keys disabled.
+    Per-tenant API keys, one entry per tenant keyed by the tenant's name. Terraform owns each tenant's record — its identity and every field below — in the shared DynamoDB table this module creates for the first tenant declared, and never owns the key secret itself. Default to no tenants, which leaves tenant API keys disabled.
 
     Fields, all optional: "models_allow" and "models_deny" scope the models the tenant may name; "endpoints_allow" and "endpoints_deny" scope the routes, as glob patterns against route path templates such as '/v1/chat/completions'; "disabled" suspends the tenant's keys without deleting the record; "aws_role_arn" is an IAM role of the tenant's own AWS account its model invocations then run under, on the tenant's own Amazon Bedrock quota and bill; "key_generation" rotates the tenant's key on demand; "requests_per_minute" and "tokens_per_minute" cap what the tenant's key may do per minute, overriding tenant_rate_limit_requests_per_minute and tenant_rate_limit_tokens_per_minute for that tenant. An absent list restricts nothing; an empty list allows nothing; deny wins over allow.
 
@@ -843,7 +843,7 @@ variable "tenants" {
       }
     }
 
-    The key secret never enters Terraform state: the server mints it and delivers it once through the SSM parameter named in the tenant_keys output. That parameter is a SecureString encrypted with this deployment's own KMS key, so reading the key also takes kms:Decrypt on that key and not merely ssm:GetParameter on the path: retrieve it and delete it as soon as it appears.
+    The key secret never enters Terraform state: the server mints it and, unless a rotation is asked for (below), delivers it once through the SSM parameter named in the tenant_keys output. That parameter is a SecureString encrypted with this deployment's own KMS key, so reading the key also takes kms:Decrypt on that key and not merely ssm:GetParameter on the path: retrieve it and delete it as soon as it appears.
 
     Declaring 'key_generation' on any tenant, like setting tenant_key_rotation_days, stores every tenant's key in an AWS Secrets Manager secret of its own instead (named in the tenant_keys output, on this deployment's KMS key), which is where a rotated key is published: the server rotates the tenant's key once whenever the value exceeds the generation it recorded at the previous rotation, so raising it -- 1, then 2, then 3 -- is a declarative, idempotent request for one rotation. The superseded key keeps working for tenant_key_rotation_overlap_seconds.
 
@@ -901,7 +901,7 @@ variable "tenants" {
 }
 
 variable "tenant_rate_limit_requests_per_minute" {
-  description = "Requests each tenant API key may make per minute, unless its tenants entry declares its own requests_per_minute. Minutes are fixed windows shared by every task through the DynamoDB table, and a request over the limit answers 429 with a retry-after naming the seconds left in the minute. Only tenant keys are limited; the deployment API key and Amazon Cognito tokens are not. Only applied while tenant API keys are enabled. Default to none: no request limit, except for the tenants entries that declare one."
+  description = "Requests each tenant API key may make per minute, unless its tenants entry declares its own requests_per_minute. Minutes are fixed windows shared by every task through the DynamoDB table, and a request over the limit answers 429 with a retry-after naming the seconds left in the minute -- on a Realtime connection, an error event after the WebSocket upgrade instead, since the upgrade succeeds before the limit is checked. The value is a ceiling, not an exact allowance: each task reserves request slots ahead in batches of up to an eighth of the limit and never returns before the minute ends what it does not use, so a tenant spread over many tasks can be refused somewhat below its limit -- size the limit with headroom for the number of tasks its traffic reaches. Only tenant keys are limited; the deployment API key and Amazon Cognito tokens are not. Only applied while tenant API keys are enabled, and the dynamodb:UpdateItem grant the counters need follows the limits declared through this module: a limit written into the table by other tooling needs that grant widened by hand, or one of these defaults set. Default to none: no request limit, except for the tenants entries that declare one."
   type        = number
   default     = null
 
@@ -912,7 +912,7 @@ variable "tenant_rate_limit_requests_per_minute" {
 }
 
 variable "tenant_rate_limit_tokens_per_minute" {
-  description = "Tokens each tenant API key may bill per minute -- input, cache-write and output tokens; cached reads are free -- unless its tenants entry declares its own tokens_per_minute. A request is admitted on the key's recent average and reconciled from what the model actually billed, so a minute may exceed the limit by the requests in flight when it was reached; the next requests answer 429 until the minute ends. Only applied while tenant API keys are enabled. Default to none: no token limit, except for the tenants entries that declare one."
+  description = "Tokens each tenant API key may bill per minute -- input, cache-write and output tokens; cached reads are free, and a batch job's output is never counted -- unless its tenants entry declares its own tokens_per_minute. A request is admitted on an estimate and reconciled from what the model actually billed, so a burst of requests larger than the estimate overshoots the limit and the next ones answer 429 until the minute ends -- on a Realtime connection, an error event after the WebSocket upgrade instead. The estimate is learned per task: until a request of the key has billed on a task, each request the key holds in flight there counts as an eighth of the limit, so a freshly started task -- every one, after a deployment or a scale-out -- admits about eight concurrent requests of that key whatever their real size and refuses the next one, and afterwards each counts as the key's mean tokens per billed request on that task. A token limit alone also caps the requests a key holds in flight at 64 per task; declaring tenant_rate_limit_requests_per_minute alongside it replaces that ceiling with the request limit. Only applied while tenant API keys are enabled. Default to none: no token limit, except for the tenants entries that declare one."
   type        = number
   default     = null
 
@@ -923,7 +923,7 @@ variable "tenant_rate_limit_tokens_per_minute" {
 }
 
 variable "tenant_key_rotation_days" {
-  description = "Rotate every tenant API key once it is this many days old, counted from its mint or its last rotation. Setting it stores the tenant keys in AWS Secrets Manager -- one secret per tenant, named in the tenant_keys output, encrypted with this deployment's own KMS key -- instead of delivering each key once through SSM Parameter Store: a rotated key becomes its secret's current version (AWSCURRENT), the superseded one stays readable as AWSPREVIOUS and keeps working for tenant_key_rotation_overlap_seconds, and a tenant granted secretsmanager:GetSecretValue on its own secret re-reads its key without an operator in the loop. 90 or less keeps the secrets within the periodic-rotation window AWS Security Hub checks. Only applied while tenant API keys are enabled. Default to none: keys are delivered once through Parameter Store and only rotated on demand, through a tenants entry's key_generation."
+  description = "Rotate every tenant API key once it is this many days old, counted from its mint or its last rotation. Setting it stores the tenant keys in AWS Secrets Manager -- one secret per tenant, named in the tenant_keys output, encrypted with this deployment's own KMS key -- instead of delivering each key once through SSM Parameter Store: a rotated key becomes its secret's current version (AWSCURRENT), the superseded one stays readable as AWSPREVIOUS and keeps working for tenant_key_rotation_overlap_seconds, and a tenant granted secretsmanager:GetSecretValue on its own secret -- a principal of this deployment's own account, since the module writes no resource policy on the secret -- re-reads its key without an operator in the loop. 90 or less keeps the secrets within the periodic-rotation window AWS Security Hub checks. Only applied while tenant API keys are enabled. Default to none: keys are delivered once through Parameter Store and only rotated on demand, through a tenants entry's key_generation."
   type        = number
   default     = null
 

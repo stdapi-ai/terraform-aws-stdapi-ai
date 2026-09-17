@@ -2,8 +2,8 @@
 Tenant API keys
 
 Each entry of var.tenants becomes one tenant record in the shared DynamoDB table: its
-identity, its model and endpoint restrictions, and its lifecycle. That is the whole of what
-Terraform owns.
+identity, its model and endpoint restrictions, its own request and token limits, and its
+lifecycle. That is the whole of what Terraform owns.
 
 The key secret is deliberately not created here. Terraform state is plaintext, shows in plan
 output, and gets committed, shared and backed up — a bearer credential must never land in it.
