@@ -559,7 +559,7 @@ variable "aws_bedrock_guardrail_trace" {
 }
 
 variable "aws_bedrock_guardrail_scope_turns" {
-  description = "Number of trailing user turns an Amazon Bedrock guardrail evaluates on the chat routes. Lowers the bill on long conversations by no longer evaluating the history the client replays, and lowers detection by the same amount. Defaults to null: the whole conversation is evaluated on every request."
+  description = "Number of trailing user turns an Amazon Bedrock guardrail evaluates on the chat routes. Lowers the bill on long conversations by no longer evaluating the history the client replays, and lowers detection with it. Only the text of a scoped turn is submitted, so images and other non-text content stop being evaluated at any value; model output is always evaluated in full. Defaults to null: the whole conversation is evaluated on every request."
   type        = number
   default     = null
   validation {
@@ -569,13 +569,13 @@ variable "aws_bedrock_guardrail_scope_turns" {
 }
 
 variable "aws_bedrock_guardrail_checks_prompt_attack" {
-  description = "Detect prompt attacks (jailbreaks, prompt injection, prompt leakage) on the Moderations API when it classifies with inline Amazon Bedrock guardrail checks. Billed as a check of its own."
+  description = "Detect prompt attacks (jailbreaks, prompt injection, prompt leakage) on the Moderations API when it classifies with inline Amazon Bedrock guardrail checks. Billed as a check of its own. Has no effect on classifications served by a guardrail resource, which applies the prompt attack filter its own configuration defines."
   type        = bool
   default     = null
 }
 
 variable "aws_bedrock_guardrail_checks_pii_entities" {
-  description = "PII entity types to detect on the Moderations API when it classifies with inline Amazon Bedrock guardrail checks, for instance [\"EMAIL\", \"PHONE\"]. Billed as a check of its own. Empty or null detects none. Broad types such as ADDRESS, NAME and URL match ordinary prose."
+  description = "PII entity types to detect on the Moderations API when it classifies with inline Amazon Bedrock guardrail checks, for instance [\"EMAIL\", \"PHONE\"]. Billed as a check of its own. Empty or null detects none. Broad types such as ADDRESS, NAME and URL match ordinary prose. Has no effect on classifications served by a guardrail resource, which applies the sensitive information policy its own configuration defines."
   type        = list(string)
   default     = null
   validation {
@@ -912,7 +912,7 @@ variable "tenant_rate_limit_requests_per_minute" {
 }
 
 variable "tenant_rate_limit_tokens_per_minute" {
-  description = "Tokens each tenant API key may bill per minute -- input, cache-write and output tokens; cached reads are free, and a batch job's output is never counted -- unless its tenants entry declares its own tokens_per_minute. A request is admitted on an estimate and reconciled from what the model actually billed, so a burst of requests larger than the estimate overshoots the limit and the next ones answer 429 until the minute ends -- on a Realtime connection, an error event after the WebSocket upgrade instead. The estimate is learned per task: until a request of the key has billed on a task, each request the key holds in flight there counts as an eighth of the limit, so a freshly started task -- every one, after a deployment or a scale-out -- admits about eight concurrent requests of that key whatever their real size and refuses the next one, and afterwards each counts as the key's mean tokens per billed request on that task. A token limit alone also caps the requests a key holds in flight at 64 per task; declaring tenant_rate_limit_requests_per_minute alongside it replaces that ceiling with the request limit. Only applied while tenant API keys are enabled. Default to none: no token limit, except for the tenants entries that declare one."
+  description = "Tokens each tenant API key may bill per minute -- input, cache-write and output tokens; cached reads are free, and a batch job's tokens are never counted -- unless its tenants entry declares its own tokens_per_minute. A request is admitted on an estimate and reconciled from what the model actually billed, so a burst of requests larger than the estimate overshoots the limit and the next ones answer 429 until the minute ends -- on a Realtime connection, an error event after the WebSocket upgrade instead. The estimate is learned per task: until a request of the key has billed on a task, each request the key holds in flight there counts as an eighth of the limit, so a freshly started task -- every one, after a deployment or a scale-out -- admits about eight concurrent requests of that key whatever their real size and refuses the next one, and afterwards each counts as the key's mean tokens per billed request on that task. A token limit alone also caps the requests a key holds in flight at 64 per task; declaring tenant_rate_limit_requests_per_minute alongside it replaces that ceiling with the request limit. Only applied while tenant API keys are enabled. Default to none: no token limit, except for the tenants entries that declare one."
   type        = number
   default     = null
 
@@ -923,7 +923,7 @@ variable "tenant_rate_limit_tokens_per_minute" {
 }
 
 variable "tenant_key_rotation_days" {
-  description = "Rotate every tenant API key once it is this many days old, counted from its mint or its last rotation. Setting it stores the tenant keys in AWS Secrets Manager -- one secret per tenant, named in the tenant_keys output, encrypted with this deployment's own KMS key -- instead of delivering each key once through SSM Parameter Store: a rotated key becomes its secret's current version (AWSCURRENT), the superseded one stays readable as AWSPREVIOUS and keeps working for tenant_key_rotation_overlap_seconds, and a tenant granted secretsmanager:GetSecretValue on its own secret -- a principal of this deployment's own account, since the module writes no resource policy on the secret -- re-reads its key without an operator in the loop. 90 or less keeps the secrets within the periodic-rotation window AWS Security Hub checks. Unsetting it again destroys every tenant's secret and reverts delivery to one-shot Parameter Store, unless a tenants entry still declares key_generation: the store is selected by these two triggers alone, and removing the last one takes it down with every key stored in it. Only applied while tenant API keys are enabled. Default to none: keys are delivered once through Parameter Store and only rotated on demand, through a tenants entry's key_generation."
+  description = "Rotate every tenant API key once it is this many days old, counted from its mint or its last rotation. Setting it stores the tenant keys in AWS Secrets Manager -- one secret per tenant, named in the tenant_keys output, encrypted with this deployment's own KMS key -- instead of delivering each key once through SSM Parameter Store: a rotated key becomes its secret's current version (AWSCURRENT), the superseded one stays readable as AWSPREVIOUS and keeps working for tenant_key_rotation_overlap_seconds, and a tenant granted secretsmanager:GetSecretValue on its own secret and kms:Decrypt on this deployment's key through Secrets Manager -- a principal of this deployment's own account, since the module writes no resource policy on the secret -- re-reads its key without an operator in the loop. 90 or less keeps the secrets within the periodic-rotation window AWS Security Hub checks. Unsetting it again destroys every tenant's secret and reverts delivery to one-shot Parameter Store, unless a tenants entry still declares key_generation: the store is selected by these two triggers alone, and removing the last one takes it down with every key stored in it. Only applied while tenant API keys are enabled. Default to none: keys are delivered once through Parameter Store and only rotated on demand, through a tenants entry's key_generation."
   type        = number
   default     = null
 
