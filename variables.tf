@@ -182,7 +182,7 @@ variable "aws_bedrock_mantle_regions" {
 }
 
 variable "aws_bedrock_mantle_preferred_models" {
-  description = "Model IDs (or ID prefixes) served by Amazon Bedrock Mantle even when also available on the classic bedrock-runtime endpoint. Cannot be combined with Bedrock Guardrails, which Mantle does not apply. Left unset, the server's own default applies: the OpenAI GPT-5.6 family, which serves the OpenAI server tools only on Mantle and is therefore billed at the In-Region rate, 1.10x the cross-region one. Amazon Bedrock token counting does not apply to Mantle-served models either. An explicit list replaces that default entirely rather than adding to it: repeat 'openai.gpt-5.6' to keep it. Set to an empty list to route every model through bedrock-runtime instead."
+  description = "Model IDs (or ID prefixes) served by Amazon Bedrock Mantle even when also available on the classic bedrock-runtime endpoint. Cannot be combined with Bedrock Guardrails, which Mantle does not apply. Left unset, the server's own default applies: the OpenAI GPT-5.6 and GPT-6 families, which serve the OpenAI server tools only on Mantle and are therefore billed at the In-Region rate, 1.10x the cross-region one. An explicit list replaces that default entirely rather than adding to it: repeat 'openai.gpt-5.6' and 'openai.gpt-6' to keep it. Set to an empty list to route every model through bedrock-runtime instead."
   type        = list(string)
   default     = null
 }
