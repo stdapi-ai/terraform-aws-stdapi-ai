@@ -980,13 +980,43 @@ data "aws_iam_policy_document" "server_services" {
     }
   }
 
+  # Transcribe - Medical Speech-to-Text (Only if S3 bucket available)
+  dynamic "statement" {
+    for_each = local.s3_bucket_name != null || var.aws_transcribe_s3_bucket != null ? [1] : []
+    content {
+      sid = "TranscribeMedical"
+      actions = [
+        "transcribe:StartMedicalTranscriptionJob",
+        "transcribe:StartMedicalStreamTranscription"
+      ]
+      # Neither action supports a resource type.
+      resources = ["*"]
+    }
+  }
+
+  # Transcribe - Medical Job Polling and Cleanup (Only if S3 bucket available)
+  dynamic "statement" {
+    for_each = local.s3_bucket_name != null || var.aws_transcribe_s3_bucket != null ? [1] : []
+    content {
+      sid = "TranscribeMedicalJobs"
+      actions = [
+        "transcribe:GetMedicalTranscriptionJob",
+        "transcribe:DeleteMedicalTranscriptionJob"
+      ]
+      resources = ["arn:${data.aws_partition.current.partition}:transcribe:*:${data.aws_caller_identity.current.account_id}:medical-transcription-job/*"]
+    }
+  }
+
   # Transcribe - Job Tagging (Only if S3 bucket available)
   dynamic "statement" {
     for_each = local.s3_bucket_name != null || var.aws_transcribe_s3_bucket != null ? [1] : []
     content {
-      sid       = "TranscribeTagging"
-      actions   = ["transcribe:TagResource"]
-      resources = ["arn:aws:transcribe:*:${data.aws_caller_identity.current.account_id}:transcription-job/*"]
+      sid     = "TranscribeTagging"
+      actions = ["transcribe:TagResource"]
+      resources = [
+        "arn:${data.aws_partition.current.partition}:transcribe:*:${data.aws_caller_identity.current.account_id}:transcription-job/*",
+        "arn:${data.aws_partition.current.partition}:transcribe:*:${data.aws_caller_identity.current.account_id}:medical-transcription-job/*"
+      ]
     }
   }
 
