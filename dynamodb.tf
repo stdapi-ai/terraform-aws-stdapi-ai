@@ -87,9 +87,8 @@ resource "aws_dynamodb_table" "main" {
   # protecting it would buy nothing and would leave a destroy that cannot complete.
   deletion_protection_enabled = local.tenant_api_keys_enabled
 
-  # The deployment's own KMS key, as every other resource this module encrypts. DynamoDB uses
-  # grants for ongoing access, so the ECS task role needs no KMS permission of its own for
-  # table reads and writes.
+  # The deployment's own KMS key, as every other resource this module encrypts. The ECS task
+  # role decrypts through DynamoDB with it (server.tf, KMSEncryptedTable).
   server_side_encryption {
     enabled     = true
     kms_key_arn = module.kms_key.arn

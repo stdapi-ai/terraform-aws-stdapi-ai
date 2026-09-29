@@ -357,6 +357,39 @@ data "aws_iam_policy_document" "server" {
     resources = ["*"]
   }
 
+  # Bedrock - Session Storage KMS encryption (Optional)
+  dynamic "statement" {
+    for_each = var.aws_bedrock_session_encryption_key_arn != null ? [1] : []
+    content {
+      sid = "BedrockSessionStorageKms"
+      actions = [
+        "kms:CreateGrant",
+        "kms:Decrypt",
+        "kms:DescribeKey",
+        "kms:GenerateDataKey",
+      ]
+      resources = [var.aws_bedrock_session_encryption_key_arn]
+    }
+  }
+
+  # IAM - Batch Service Role Hand-Off (Optional)
+  # Creating a job hands the service role to Amazon Bedrock, which requires iam:PassRole. Scoped to
+  # that one role and to that one service: a wider grant would let the task role hand any role it
+  # can name to Amazon Bedrock and inherit its permissions.
+  dynamic "statement" {
+    for_each = local.bedrock_batch_role_arn != null ? [1] : []
+    content {
+      sid       = "BedrockBatchPassRole"
+      actions   = ["iam:PassRole"]
+      resources = [local.bedrock_batch_role_arn]
+      condition {
+        test     = "StringEquals"
+        variable = "iam:PassedToService"
+        values   = ["bedrock.amazonaws.com"]
+      }
+    }
+  }
+
   # Bedrock - Model & Tool Invocation (Always Required)
   statement {
     sid = "BedrockModelInvoke"
@@ -635,39 +668,6 @@ data "aws_iam_policy_document" "server" {
 # so that neither half can ever be empty -- the Polly, Comprehend and Translate
 # statements below are granted unconditionally.
 data "aws_iam_policy_document" "server_services" {
-
-  # Bedrock - Session Storage KMS encryption (Optional)
-  dynamic "statement" {
-    for_each = var.aws_bedrock_session_encryption_key_arn != null ? [1] : []
-    content {
-      sid = "BedrockSessionStorageKms"
-      actions = [
-        "kms:CreateGrant",
-        "kms:Decrypt",
-        "kms:DescribeKey",
-        "kms:GenerateDataKey",
-      ]
-      resources = [var.aws_bedrock_session_encryption_key_arn]
-    }
-  }
-
-  # IAM - Batch Service Role Hand-Off (Optional)
-  # Creating a job hands the service role to Amazon Bedrock, which requires iam:PassRole. Scoped to
-  # that one role and to that one service: a wider grant would let the task role hand any role it
-  # can name to Amazon Bedrock and inherit its permissions.
-  dynamic "statement" {
-    for_each = local.bedrock_batch_role_arn != null ? [1] : []
-    content {
-      sid       = "BedrockBatchPassRole"
-      actions   = ["iam:PassRole"]
-      resources = [local.bedrock_batch_role_arn]
-      condition {
-        test     = "StringEquals"
-        variable = "iam:PassedToService"
-        values   = ["bedrock.amazonaws.com"]
-      }
-    }
-  }
 
   # Pricing - Cost Tracking (Optional)
   dynamic "statement" {
@@ -1075,9 +1075,7 @@ data "aws_iam_policy_document" "server_services" {
   # DynamoDB - Shared Table (Optional)
   # Scoped to the table itself, no index ARNs: the table has no GSI. Scan and BatchGetItem are
   # deliberately not granted — no code path calls them — and UpdateItem is granted separately
-  # below, on the rate-limit counters alone. When a customer managed key encrypts the table,
-  # DynamoDB uses grants it creates at table creation time to read and write, so no KMS
-  # permission is needed here.
+  # below, on the rate-limit counters alone.
   dynamic "statement" {
     for_each = local.dynamodb_table_name != null ? [1] : []
     content {
@@ -1091,6 +1089,23 @@ data "aws_iam_policy_document" "server_services" {
         "dynamodb:DescribeTimeToLive",
       ]
       resources = [local.dynamodb_table_arn]
+    }
+  }
+
+  # KMS - Shared Table Encryption (Optional, only for the Terraform-managed table)
+  # The key policy delegates to IAM, and DynamoDB decrypts the table key as the caller: without
+  # this, every table read and write is refused with AccessDenied on kms:Decrypt.
+  dynamic "statement" {
+    for_each = local.create_dynamodb_table ? [1] : []
+    content {
+      sid       = "KMSEncryptedTable"
+      actions   = ["kms:Decrypt"]
+      resources = [module.kms_key.arn]
+      condition {
+        test     = "StringEquals"
+        variable = "kms:ViaService"
+        values   = ["dynamodb.${data.aws_region.current.region}.amazonaws.com"]
+      }
     }
   }
 
