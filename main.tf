@@ -15,18 +15,18 @@ locals {
   ecs_service = true
   port        = 8000
 
-  # AWS Marketplace ECR configuration
-  marketplace_ecr_repository_url = "709825985650.dkr.ecr.us-east-1.amazonaws.com/j-goutin/stdapi.ai"
-  container_image                = "${local.marketplace_ecr_repository_url}:${var.version_to_deploy}-${var.cpu_architecture == "ARM64" ? "arm64" : "amd64"}"
+  # The public image by default; an operator mirror of it in their own Amazon ECR repository when
+  # set, which is pulled through the ECR VPC endpoints and so needs no internet access.
+  container_image_repository_url = coalesce(var.container_image_repository_url, "ghcr.io/stdapi-ai/stdapi.ai-community")
+  container_image                = "${local.container_image_repository_url}:${var.version_to_deploy}"
 
-  # AWS PRM attribution tags
-  apn_product_code = "72gxmztpjz2hm5qnkkg0iiazo"
-  apn_tags         = { "aws-apn-id" = "pc:${local.apn_product_code}" }
+  # The region of the mirror repository: a pull from another region cannot go through the VPC
+  # endpoints, which are regional.
+  container_image_regions = var.container_image_repository_url != null ? [split(".", var.container_image_repository_url)[3]] : []
 
-  # What every resource this module creates is tagged with. The attribution tag is merged last, so
-  # a var.tags entry of the same key cannot displace it: it is what AWS reads to attribute the
-  # deployment to the Marketplace product, and it is not the operator's to change.
-  tags = merge(var.tags, local.apn_tags)
+  # A tag of the module's own keeps the Security Hub tagging controls passing when var.tags is
+  # empty; var.tags is merged last, so an operator can override its value.
+  tags = merge({ "stdapi-ai.deployment" = local.name_prefix }, var.tags)
 }
 
 # var.name_prefix is bounded against the shortest region name AWS publishes, because a variable
@@ -133,7 +133,7 @@ EOF
 
 module "kms_key" {
   source  = "JGoutin/kms-key/aws"
-  version = "~> 1.2"
+  version = "~> 1.2, >= 1.2.2"
 
   id          = var.kms_key_id
   name_prefix = local.name

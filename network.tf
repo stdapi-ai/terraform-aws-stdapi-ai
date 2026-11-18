@@ -49,6 +49,7 @@ locals {
     local.translate_regions,
     local.sqs_regions,
     local.s3vectors_regions,
+    local.container_image_regions,
   )), [local.current_region])) > 0
 
   # Build VPC endpoints list dynamically based on which services are in the current region
@@ -71,10 +72,17 @@ locals {
     local.create_dynamodb_table ? ["dynamodb"] : [],
   )
 
-  # Internet access required. WebRTC media mode counts too: callers and the
-  # STUN server are on the internet, and with nat_gateways_allowed = false
-  # (which the mode requires) this is also what gives the task its public IP.
-  internet_access_required = local.cross_region_access_needed || var.aws_bedrock_marketplace_auto_subscribe != false || var.realtime_webrtc_media_enabled
+  # Internet access required. The public container image counts: only a mirror in the
+  # operator's own Amazon ECR repository is reachable through the VPC endpoints. WebRTC media
+  # mode counts too: callers and the STUN server are on the internet, and with
+  # nat_gateways_allowed = false (which the mode requires) this is also what gives the task its
+  # public IP.
+  internet_access_required = (
+    local.cross_region_access_needed ||
+    var.container_image_repository_url == null ||
+    var.aws_bedrock_marketplace_auto_subscribe != false ||
+    var.realtime_webrtc_media_enabled
+  )
 
   # The VPC module only owns a network of its own when no subnets were supplied.
   vpc_created = length(var.subnet_ids) == 0
@@ -90,7 +98,7 @@ resource "terraform_data" "enforced_vpc_endpoints_validation" {
   lifecycle {
     precondition {
       condition     = !(local.vpc_created && local.internet_access_required && !local.nat_gateways_allowed)
-      error_message = "compliance_vpc_endpoints_enabled/guardduty_vpc_endpoint_enabled cannot be combined with nat_gateways_allowed = false while internet access is required (the default, driven by aws_bedrock_marketplace_auto_subscribe or cross-region service usage): the application subnets become public, leaving no private subnet for the endpoint's network interface, so the endpoint would silently not be created. Set nat_gateways_allowed = true (or leave it unset), or turn off compliance_vpc_endpoints_enabled/guardduty_vpc_endpoint_enabled."
+      error_message = "compliance_vpc_endpoints_enabled/guardduty_vpc_endpoint_enabled cannot be combined with nat_gateways_allowed = false while internet access is required (the default, driven by the public container image when container_image_repository_url is unset, aws_bedrock_marketplace_auto_subscribe or cross-region service usage): the application subnets become public, leaving no private subnet for the endpoint's network interface, so the endpoint would silently not be created. Set nat_gateways_allowed = true (or leave it unset), turn off compliance_vpc_endpoints_enabled/guardduty_vpc_endpoint_enabled, or set container_image_repository_url to a mirror in the deployment region with aws_bedrock_marketplace_auto_subscribe = false."
     }
   }
 }
@@ -100,8 +108,9 @@ module "vpc" {
   # 1.6 is the first release whose ipv6_enabled answers for provided subnets that
   # carry no IPv6 block, which every dual-stack decision below relies on, and the
   # first that opens application-subnet network ACL flows other than TCP, which
-  # the WebRTC media mode relies on.
-  version = "~> 1.6"
+  # the WebRTC media mode relies on. 1.6.2 is the first that sends no AWS Partner
+  # user agent.
+  version = "~> 1.6, >= 1.6.2"
 
   name_prefix                                = local.name
   tags                                       = local.tags
@@ -126,7 +135,7 @@ module "vpc" {
   kms_policy_dependency                      = module.kms_key.policy_dependency
   vpc_endpoints_services = concat(
     local.vpc_endpoints_core,
-    local.ecs_service ? ["ecr.dkr", "ecr.api", "metering-marketplace"] : [],
+    local.ecs_service ? ["ecr.dkr", "ecr.api"] : [],
   )
   public_subnets_enabled = var.alb_enabled && var.alb_public
   public_to_app_ports = {

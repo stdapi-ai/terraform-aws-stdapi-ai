@@ -28,7 +28,7 @@ locals {
 
 module "regional_kms" {
   source   = "JGoutin/kms-key/aws"
-  version  = "~> 1.2"
+  version  = "~> 1.2, >= 1.2.2"
   for_each = local.regional_buckets_to_create
 
   name_prefix = local.name
