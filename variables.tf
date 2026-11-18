@@ -1,7 +1,7 @@
 # Global configuration
 
 variable "name_prefix" {
-  description = "Prefix to add to all created resources names. Every created name is \"<name_prefix>-<8 hexadecimal characters>-<region>\", so a long prefix reaches the length limit of the name it is longest in: 22 characters is the most any region accepts, and 13 when alb_enabled is true. Both assume the shortest region name AWS publishes, nine characters, and a longer one lowers them at different rates: the 22 by two characters per extra character (the bound is 40 minus twice the region name length, because the VPC flow log role name repeats the region), the 13 by one (22 minus the region name length)."
+  description = "Prefix to add to all created resources names. Every created name is the prefix, 8 hexadecimal characters and the region, joined by hyphens (`PREFIX-0123abcd-REGION`), so a long prefix reaches the length limit of the name it is longest in: 22 characters is the most any region accepts, and 13 when alb_enabled is true. Both assume the shortest region name AWS publishes, nine characters, and a longer one lowers them at different rates: the 22 by two characters per extra character (the bound is 40 minus twice the region name length, because the VPC flow log role name repeats the region), the 13 by one (22 minus the region name length)."
   type        = string
   default     = "stdapiai"
 
@@ -24,14 +24,9 @@ variable "name_prefix" {
 }
 
 variable "tags" {
-  description = "Tags applied to every resource this module creates, on top of the tags it sets itself. Use these for cost allocation, ownership or environment. The 'aws-apn-id' tag is reserved: it attributes the deployment to the AWS Marketplace product and is merged last, so an entry of that key here is ignored."
+  description = "Tags applied to every resource this module creates, on top of the 'stdapi-ai.deployment' tag it sets itself (which an entry of the same key overrides). Use these for cost allocation, ownership or environment."
   type        = map(string)
   default     = {}
-
-  validation {
-    condition     = !contains(keys(var.tags), "aws-apn-id")
-    error_message = "The 'aws-apn-id' tag is set by this module to attribute the deployment to its AWS Marketplace product and cannot be overridden."
-  }
 }
 
 # Application Configuration
@@ -1563,9 +1558,20 @@ variable "realtime_allow_session_override" {
 }
 
 variable "version_to_deploy" {
-  description = "Container image version tag from AWS Marketplace. Defaults to the server version this module release was built and tested against, which is what makes a given module version reproducible; there is no 'latest' resolution. Raise it to take a newer server without changing module version, or lower it to roll back. A '-arm64' or '-amd64' suffix is appended automatically based on var.cpu_architecture, so the value must not include an architecture suffix."
+  description = "Container image version tag. Defaults to 'latest', the newest published release. Set a version such as '1.20.1' to pin one. The tag names a multi-architecture image, and var.cpu_architecture selects the platform the tasks run."
   type        = string
-  default     = "1.19.1"
+  default     = "latest"
+}
+
+variable "container_image_repository_url" {
+  description = "URL of an Amazon ECR repository in the deployment region, such as '123456789012.dkr.ecr.eu-west-1.amazonaws.com/stdapi.ai', without a tag or a digest. It holds a mirror of the 'ghcr.io/stdapi-ai/stdapi.ai-community' image with the same multi-architecture `VERSION` tag, where VERSION is var.version_to_deploy (copy it with 'skopeo copy --all'). Set it for a deployment without internet access: the image is then pulled through the module's Amazon ECR VPC endpoints, and the task execution role is granted pulls from that repository only. A repository in another region is pulled over the internet, since the VPC endpoints are regional. Defaults (null) to the public 'ghcr.io/stdapi-ai/stdapi.ai-community' image, which requires internet access from the tasks."
+  type        = string
+  default     = null
+
+  validation {
+    condition     = var.container_image_repository_url == null || can(regex("^[0-9]{12}\\.dkr\\.ecr\\.[a-z0-9-]+\\.amazonaws\\.com/[a-z0-9]+(?:[._-][a-z0-9]+)*(?:/[a-z0-9]+(?:[._-][a-z0-9]+)*)*$", var.container_image_repository_url))
+    error_message = "container_image_repository_url must be the URL of an Amazon ECR repository in a commercial AWS Region, of the form '<account>.dkr.ecr.<region>.amazonaws.com/<repository>' (such as '123456789012.dkr.ecr.eu-west-1.amazonaws.com/stdapi.ai'), with no scheme, no tag and no digest."
+  }
 }
 
 # KMS configuration

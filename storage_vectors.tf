@@ -42,7 +42,7 @@ locals {
 # must name the S3 Vectors service principal, which the shared key has no reason to carry.
 module "vectors_kms" {
   source  = "JGoutin/kms-key/aws"
-  version = "~> 1.2"
+  version = "~> 1.2, >= 1.2.2"
   count   = local.create_s3_vectors_bucket ? 1 : 0
 
   name_prefix           = "${local.name_prefix}-vectors"

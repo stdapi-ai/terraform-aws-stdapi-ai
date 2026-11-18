@@ -18,8 +18,9 @@ module "server" {
   # service-linked role recreates after the cluster is gone, and that redeploys the
   # service when its capacity provider strategy or its secrets change. 1.4.4 is the
   # first that keeps every prefix-derived name within its AWS limit, the rule
-  # bedrock_user_role.tf reconstructs the task role's name from.
-  version                           = ">= 1.4.4, < 2.0.0"
+  # bedrock_user_role.tf reconstructs the task role's name from. 1.4.5 is the first
+  # that sends no AWS Partner user agent.
+  version                           = ">= 1.4.5, < 2.0.0"
   tags                              = local.tags
   kms_key_id                        = module.kms_key.id
   kms_policy_dependency             = module.kms_key.policy_dependency
@@ -347,16 +348,6 @@ resource "aws_iam_policy" "server_services" {
 }
 
 data "aws_iam_policy_document" "server" {
-
-  # Product usage (Always Required)
-  statement {
-    sid = "MarketplaceRegister"
-    actions = [
-      "aws-marketplace:RegisterUsage",
-    ]
-    resources = ["*"]
-  }
-
   # Bedrock - Session Storage KMS encryption (Optional)
   dynamic "statement" {
     for_each = var.aws_bedrock_session_encryption_key_arn != null ? [1] : []
