@@ -5,7 +5,9 @@
 
 **Deploy an OpenAI, Anthropic, Cohere & Ollama compatible AI gateway on AWS.** ECS Fargate infrastructure with auto-scaling, private subnets, KMS encryption and least-privilege IAM by default; HTTPS, WAF, API key authentication and CloudWatch alarms are opt-in inputs — see [What this minimal configuration deploys](#minimal-deployment) and [What gets provisioned, and when](#what-gets-provisioned-and-when).
 
-🌐 [Documentation](https://stdapi.ai/?utm_source=terraform-readme&utm_medium=repo&utm_campaign=owned-surfaces) · 💻 [GitHub Repository](https://github.com/stdapi-ai/stdapi.ai)
+🌐 [Documentation](https://stdapi.jgoutin.dev/?utm_source=terraform-readme&utm_medium=repo&utm_campaign=owned-surfaces) · 💻 [GitHub Repository](https://github.com/stdapi-ai/stdapi.ai)
+
+> **stdapi.ai is discontinued.** Module 1.20.1 is the final release of this module: no further development or support is planned. It deploys the latest stdapi.ai image by default, and the source code stays available under the AGPL-3.0-or-later. See the [release notes](https://stdapi.jgoutin.dev/roadmap/?utm_source=terraform-readme&utm_medium=repo&utm_campaign=owned-surfaces).
 
 ## Quick Start
 
@@ -63,7 +65,7 @@ module "stdapi_ai" {
 }
 ```
 
-For ready-to-deploy variants (single-region, EU/US multi-region, Open WebUI), see the [**samples repository**](https://github.com/stdapi-ai/samples). For deeper patterns (BYO VPC / ALB / Route 53 / S3, manual ECS, cost-optimized), see the [**advanced deployment guide**](https://stdapi.ai/operations_deploy_advanced/?utm_source=terraform-readme&utm_medium=repo&utm_campaign=owned-surfaces).
+For ready-to-deploy variants (single-region, EU/US multi-region, Open WebUI), see the [**samples repository**](https://github.com/stdapi-ai/samples). For deeper patterns (BYO VPC / ALB / Route 53 / S3, manual ECS, cost-optimized), see the [**advanced deployment guide**](https://stdapi.jgoutin.dev/operations_deploy_advanced/?utm_source=terraform-readme&utm_medium=repo&utm_campaign=owned-surfaces).
 
 ## Settings that matter
 
@@ -198,7 +200,7 @@ Ready-to-deploy Terraform examples live in the [**stdapi.ai samples repository**
 | [getting_started_docling](https://github.com/stdapi-ai/samples/tree/main/getting_started_docling) | Docling Serve document conversion, the ingestion stage of a RAG pipeline |
 | [getting_started_ragflow](https://github.com/stdapi-ai/samples/tree/main/getting_started_ragflow) | RAGFlow document Q&A over your own corpus (Amazon OpenSearch + Aurora PostgreSQL + Valkey + S3) |
 
-For integration against existing infrastructure and non-Terraform deployments, see the [advanced deployment guide](https://stdapi.ai/operations_deploy_advanced/?utm_source=terraform-readme&utm_medium=repo&utm_campaign=owned-surfaces).
+For integration against existing infrastructure and non-Terraform deployments, see the [advanced deployment guide](https://stdapi.jgoutin.dev/operations_deploy_advanced/?utm_source=terraform-readme&utm_medium=repo&utm_campaign=owned-surfaces).
 
 ## Container image
 
@@ -245,28 +247,28 @@ Once the upgraded deployment runs, you can cancel the stdapi.ai subscription in 
 
 stdapi.ai is licensed under the [**GNU Affero General Public License v3.0 or later**](LICENSE-AGPL). There is no license fee.
 
-AWS resources this module creates (Fargate, ALB, NAT gateways, KMS, CloudWatch, S3, SQS, DynamoDB, and one Secrets Manager secret per tenant once a key rotation is asked for) and Amazon Bedrock inference are billed by AWS from the first hour, with no markup. `autoscaling_min_capacity` defaults to one task per availability zone and `availability_zones_count` defaults to all AZs in the region, so a default deployment in a 3-AZ region runs 3 Fargate tasks, and 6 in a 6-AZ region such as `us-east-1`. Those are the floor, not the ceiling: `autoscaling_cpu_target_percent` defaults to 70, so the fleet scales out under CPU pressure up to `autoscaling_max_capacity`, five times the minimum unless you set it. Set `availability_zones_count`, `autoscaling_min_capacity` and `autoscaling_max_capacity` explicitly to control this, or `autoscaling_cpu_target_percent = null` to hold the fleet at a fixed size. Of those resources, the indexing queues are the one with no standing charge at all: [Amazon SQS bills per request](https://aws.amazon.com/sqs/pricing/), an idle queue costs nothing, and indexing a file is a handful of requests. See the [cost management guide](https://stdapi.ai/operations_cost_management/?utm_source=terraform-readme&utm_medium=repo&utm_campaign=owned-surfaces) and the [licensing guide](https://stdapi.ai/operations_licensing/?utm_source=terraform-readme&utm_medium=repo&utm_campaign=owned-surfaces).
+AWS resources this module creates (Fargate, ALB, NAT gateways, KMS, CloudWatch, S3, SQS, DynamoDB, and one Secrets Manager secret per tenant once a key rotation is asked for) and Amazon Bedrock inference are billed by AWS from the first hour, with no markup. `autoscaling_min_capacity` defaults to one task per availability zone and `availability_zones_count` defaults to all AZs in the region, so a default deployment in a 3-AZ region runs 3 Fargate tasks, and 6 in a 6-AZ region such as `us-east-1`. Those are the floor, not the ceiling: `autoscaling_cpu_target_percent` defaults to 70, so the fleet scales out under CPU pressure up to `autoscaling_max_capacity`, five times the minimum unless you set it. Set `availability_zones_count`, `autoscaling_min_capacity` and `autoscaling_max_capacity` explicitly to control this, or `autoscaling_cpu_target_percent = null` to hold the fleet at a fixed size. Of those resources, the indexing queues are the one with no standing charge at all: [Amazon SQS bills per request](https://aws.amazon.com/sqs/pricing/), an idle queue costs nothing, and indexing a file is a handful of requests. See the [cost management guide](https://stdapi.jgoutin.dev/operations_cost_management/?utm_source=terraform-readme&utm_medium=repo&utm_campaign=owned-surfaces) and the [licensing guide](https://stdapi.jgoutin.dev/operations_licensing/?utm_source=terraform-readme&utm_medium=repo&utm_campaign=owned-surfaces).
 
 ## Documentation
 
 | Resource | Description |
 |---|---|
-| **[Getting Started](https://stdapi.ai/operations_getting_started/?utm_source=terraform-readme&utm_medium=repo&utm_campaign=owned-surfaces)** | Deployment examples and first API call |
-| **[Advanced Deployment](https://stdapi.ai/operations_deploy_advanced/?utm_source=terraform-readme&utm_medium=repo&utm_campaign=owned-surfaces)** | VPC integration, multi-region, cost optimization |
-| **[Configuration](https://stdapi.ai/operations_configuration/?utm_source=terraform-readme&utm_medium=repo&utm_campaign=owned-surfaces)** | All environment variables and module parameters |
-| **[API Reference](https://stdapi.ai/api_overview/?utm_source=terraform-readme&utm_medium=repo&utm_campaign=owned-surfaces)** | OpenAI & Anthropic compatible API documentation |
-| **[Use Cases](https://stdapi.ai/use_cases/?utm_source=terraform-readme&utm_medium=repo&utm_campaign=owned-surfaces)** | Open WebUI, n8n, coding assistants, and more |
-| **[Features](https://stdapi.ai/features/?utm_source=terraform-readme&utm_medium=repo&utm_campaign=owned-surfaces)** | Full product capabilities |
-| **[Cost Management](https://stdapi.ai/operations_cost_management/?utm_source=terraform-readme&utm_medium=repo&utm_campaign=owned-surfaces)** | AWS resource costs and per-request cost estimation |
-| **[Resilience & Failover](https://stdapi.ai/operations_resilience/?utm_source=terraform-readme&utm_medium=repo&utm_campaign=owned-surfaces)** | Multi-region routing, retry scope, and what does not fail over |
-| **[Licensing](https://stdapi.ai/operations_licensing/?utm_source=terraform-readme&utm_medium=repo&utm_campaign=owned-surfaces)** | AGPL-3.0-or-later license terms |
-| **[Compliance](https://stdapi.ai/operations_compliance/?utm_source=terraform-readme&utm_medium=repo&utm_campaign=owned-surfaces)** | Data residency, region allow-lists, encryption, and outbound paths |
-| **[IAM Permissions](https://stdapi.ai/operations_iam_permissions/?utm_source=terraform-readme&utm_medium=repo&utm_campaign=owned-surfaces)** | Task-role permissions the running gateway needs, for custom deployments and policy auditing |
+| **[Getting Started](https://stdapi.jgoutin.dev/operations_getting_started/?utm_source=terraform-readme&utm_medium=repo&utm_campaign=owned-surfaces)** | Deployment examples and first API call |
+| **[Advanced Deployment](https://stdapi.jgoutin.dev/operations_deploy_advanced/?utm_source=terraform-readme&utm_medium=repo&utm_campaign=owned-surfaces)** | VPC integration, multi-region, cost optimization |
+| **[Configuration](https://stdapi.jgoutin.dev/operations_configuration/?utm_source=terraform-readme&utm_medium=repo&utm_campaign=owned-surfaces)** | All environment variables and module parameters |
+| **[API Reference](https://stdapi.jgoutin.dev/api_overview/?utm_source=terraform-readme&utm_medium=repo&utm_campaign=owned-surfaces)** | OpenAI & Anthropic compatible API documentation |
+| **[Use Cases](https://stdapi.jgoutin.dev/use_cases/?utm_source=terraform-readme&utm_medium=repo&utm_campaign=owned-surfaces)** | Open WebUI, n8n, coding assistants, and more |
+| **[Features](https://stdapi.jgoutin.dev/features/?utm_source=terraform-readme&utm_medium=repo&utm_campaign=owned-surfaces)** | Full product capabilities |
+| **[Cost Management](https://stdapi.jgoutin.dev/operations_cost_management/?utm_source=terraform-readme&utm_medium=repo&utm_campaign=owned-surfaces)** | AWS resource costs and per-request cost estimation |
+| **[Resilience & Failover](https://stdapi.jgoutin.dev/operations_resilience/?utm_source=terraform-readme&utm_medium=repo&utm_campaign=owned-surfaces)** | Multi-region routing, retry scope, and what does not fail over |
+| **[Licensing](https://stdapi.jgoutin.dev/operations_licensing/?utm_source=terraform-readme&utm_medium=repo&utm_campaign=owned-surfaces)** | AGPL-3.0-or-later license terms |
+| **[Compliance](https://stdapi.jgoutin.dev/operations_compliance/?utm_source=terraform-readme&utm_medium=repo&utm_campaign=owned-surfaces)** | Data residency, region allow-lists, encryption, and outbound paths |
+| **[IAM Permissions](https://stdapi.jgoutin.dev/operations_iam_permissions/?utm_source=terraform-readme&utm_medium=repo&utm_campaign=owned-surfaces)** | Task-role permissions the running gateway needs, for custom deployments and policy auditing |
 
 ## AWS Qualified Software
 
 <div align="center">
-<img src="https://stdapi.ai/styles/aws_qualified_software_badge_light.png" alt="AWS Qualified Software badge" width="120" />
+<img src="https://stdapi.jgoutin.dev/styles/aws_qualified_software_badge_light.png" alt="AWS Qualified Software badge" width="120" />
 
 stdapi.ai was approved by AWS as **AWS Qualified Software**, after AWS verified it against its technical and security requirements.
 </div>
